@@ -8,12 +8,12 @@ import {
   effectiveReport,
   fmt,
   officialMark,
-  requiredForEvaluations,
+  solvePlan,
 } from '../lib/calc';
 import type { Assessment, CatMark, Course, CourseReport } from '../lib/types';
 import { emptyWhatIf, useStore, type WhatIf } from '../store';
-import { Delta, GlassButton, Icon, Mark, MiniRing, NavBar, NumberInput, Ring, Section, Sheet, Stepper, Toggle, TrendChart } from '../components/ui';
-import type { NeededPlan } from '../lib/storage';
+import { Delta, GlassButton, Icon, Mark, MiniRing, NavBar, NumberInput, Ring, Section, Sheet, Stepper, TrendChart } from '../components/ui';
+import type { PlanItem } from '../lib/storage';
 import { displayName } from './Courses';
 
 function applyWhatIf(report: CourseReport, w: WhatIf): Assessment[] {
@@ -172,7 +172,7 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
             })}
           </Section>
 
-          <NeededSection courseCode={course.code} report={report} assessments={assessments} current={shown} offset={official !== null && baseCalc !== null ? official - baseCalc : 0} />
+          <NeededSection onAdjustWeights={() => setWeightsOpen(true)} courseCode={course.code} report={report} assessments={assessments} current={shown} offset={official !== null && baseCalc !== null ? official - baseCalc : 0} />
 
           <Section
             header="Evaluations"
@@ -453,7 +453,9 @@ function NeededSection({
   assessments,
   current,
   offset,
+  onAdjustWeights,
 }: {
+  onAdjustWeights(): void;
   courseCode: string;
   report: CourseReport;
   assessments: Assessment[];
@@ -462,138 +464,195 @@ function NeededSection({
 }) {
   const store = useStore();
   const withData = categoriesWithData(report);
-  const finalCats = report.categories.filter((c) => isFinalCat(c.label));
-  const finalPending = finalCats.length > 0 && finalCats.every((c) => !withData.includes(c.key));
-  const regularCats = report.categories.filter((c) => !finalCats.includes(c));
-  const firstCat = withData.find((k) => regularCats.some((c) => c.key === k)) ?? regularCats[0]?.key ?? report.categories[0]?.key;
+  const weightSum = report.categories.reduce((t, c) => t + (report.weights[c.key] ?? 0), 0);
+  const share = (k: string) => (weightSum > 0 ? ((report.weights[k] ?? 0) / weightSum) * 100 : 0);
+  const example = (k: string) => [...report.assessments].reverse().find((a) => a.marks[k] && !a.marks[k].excluded)?.name;
+  const firstRegular = report.categories.find((c) => !isFinalCat(c.label) && withData.includes(c.key))?.key ?? report.categories[0]?.key;
 
+  // Saved plan (or a sensible starting point), upgraded from the older format if needed.
   const saved = store.vault.neededPlans[courseCode];
-  const plan: NeededPlan = {
-    target: saved?.target ?? (current === null ? 85 : Math.min(100, Math.floor(current / 5) * 5 + 5)),
-    left: saved?.left ?? 1,
-    weights: saved?.weights ?? Object.fromEntries(firstCat ? [[firstCat, typicalWeight(report, firstCat)]] : []),
-    final: saved?.final ?? finalPending,
-  };
-  const update = (patch: Partial<NeededPlan>) => store.setNeededPlan(courseCode, { ...plan, ...patch });
+  const items: Record<string, PlanItem> = {};
+  for (const c of report.categories) {
+    const finalPending = isFinalCat(c.label) && !withData.includes(c.key);
+    let item: PlanItem | undefined = saved?.items?.[c.key];
+    if (!item && saved && !saved.items) {
+      if (c.key === firstRegular) item = { count: saved.left ?? 1, weight: saved.weights?.[c.key] ?? null };
+      else if (isFinalCat(c.label)) item = { count: saved.final ? 1 : 0 };
+    }
+    items[c.key] = item ?? { count: c.key === firstRegular ? 1 : finalPending ? 1 : 0 };
+  }
+  const target = saved?.target ?? (current === null ? 85 : Math.min(100, Math.floor(current / 5) * 5 + 5));
+  const save = (next: { target?: number; items?: Record<string, PlanItem> }) =>
+    store.setNeededPlan(courseCode, { target: next.target ?? target, items: next.items ?? items });
+  const setItem = (k: string, patch: Partial<PlanItem>) => save({ items: { ...items, [k]: { ...items[k], ...patch } } });
 
-  // Weight inputs keep their text while typing; the saved number updates as you go.
-  const [weightText, setWeightText] = useState<Record<string, string>>(() =>
-    Object.fromEntries(report.categories.map((c) => [c.key, plan.weights[c.key] ? String(plan.weights[c.key]) : ''])),
+  const [open, setOpen] = useState<string | null>(null);
+  const [text, setText] = useState<Record<string, { expected: string; weight: string }>>(() =>
+    Object.fromEntries(
+      report.categories.map((c) => [
+        c.key,
+        { expected: items[c.key].expected != null ? String(items[c.key].expected) : '', weight: items[c.key].weight != null ? String(items[c.key].weight) : '' },
+      ]),
+    ),
   );
-  const [showWeights, setShowWeights] = useState(false);
 
-  const includeFinal = plan.final && finalCats.length > 0;
-  const evals = useMemo(() => {
-    const list: Array<Record<string, number>> = Array.from({ length: plan.left }, () => plan.weights);
-    if (includeFinal) list.push(Object.fromEntries(finalCats.map((c) => [c.key, 1])));
-    return list;
+  const entries = report.categories.map((c) => ({
+    key: c.key,
+    count: items[c.key].count,
+    weight: items[c.key].weight ?? typicalWeight(report, c.key),
+    expected: items[c.key].expected ?? null,
+  }));
+  const plan = useMemo(
+    () => solvePlan(report, report.weights, assessments, entries, target - offset),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan.left, JSON.stringify(plan.weights), includeFinal]);
+    [report, assessments, JSON.stringify(entries), target, offset],
+  );
+  const res = plan.result;
+  const min = res?.min === undefined ? undefined : res.min + offset;
+  const max = res?.max === undefined ? undefined : res.max + offset;
+  const projected = plan.projected === null ? null : plan.projected + offset;
 
-  const res = useMemo(() => {
-    const r = requiredForEvaluations(report, report.weights, assessments, evals, plan.target - offset);
-    return { ...r, max: r.max === undefined ? undefined : r.max + offset, min: r.min === undefined ? undefined : r.min + offset };
-  }, [report, assessments, evals, plan.target, offset]);
-
-  const weightSummary = report.categories
-    .filter((c) => (plan.weights[c.key] ?? 0) > 0)
-    .map((c) => `${c.short} ×${trim(plan.weights[c.key])}`)
+  const unknownList = report.categories
+    .filter((c) => items[c.key].count > 0 && items[c.key].expected == null)
+    .map((c) => `${items[c.key].count} ${c.label}`)
     .join(', ');
-  const what = [
-    plan.left > 0 && (plan.left === 1 ? 'your next evaluation' : `each of your ${plan.left} remaining evaluations`),
-    includeFinal && (plan.left > 0 ? 'the final' : 'your final'),
-  ]
-    .filter(Boolean)
-    .join(' and ');
+  const total = report.categories.reduce((t, c) => t + items[c.key].count, 0);
 
   return (
-    <Section header="What do I need?" footer="Saved for this course. Includes any what-if changes you've made.">
+    <Section header="What do I need?" footer="Saved for this course. Tap a row to enter a score you already expect, like 100% on attendance.">
       <div className="row">
         <span className="row-main">
-          <span className="row-title">I want to finish with</span>
+          <span className="row-title">My goal</span>
         </span>
-        <span className="target-value">{plan.target}%</span>
-        <Stepper value={plan.target} onChange={(target) => update({ target })} min={50} max={100} label="target mark" />
+        <span className="target-value">{target}%</span>
+        <Stepper value={target} onChange={(t) => save({ target: t })} min={50} max={100} label="goal" />
       </div>
-      <div className="row">
-        <span className="row-main">
-          <span className="row-title">Evaluations left</span>
-        </span>
-        <span className="target-value">{plan.left}</span>
-        <Stepper value={plan.left} onChange={(left) => update({ left })} min={includeFinal ? 0 : 1} max={20} label="evaluations left" />
-      </div>
-      {finalCats.length > 0 && (
-        <div className="row">
-          <span className="row-main">
-            <span className="row-title">Final still to come</span>
-            <span className="row-sub">{finalCats.map((c) => c.label).join(', ')}</span>
-          </span>
-          <Toggle
-            label="Final still to come"
-            checked={includeFinal}
-            onChange={(final) => update({ final, left: !final && plan.left === 0 ? 1 : plan.left })}
-          />
-        </div>
-      )}
+
+      <div className="row list-caption">Still to come</div>
+      {report.categories.map((c) => {
+        const it = items[c.key];
+        const pct = share(c.key);
+        const ex = example(c.key);
+        const isOpen = open === c.key;
+        return (
+          <div key={c.key} className={`plan-item ${it.count ? 'on' : ''}`}>
+            <div className="row plan-row">
+              <div className="plan-label" role="button" tabIndex={0} onClick={() => setOpen(isOpen ? null : c.key)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setOpen(isOpen ? null : c.key)} aria-expanded={isOpen}>
+                <span className="letter">{c.short}</span>
+                <span className="row-main">
+                  <span className="row-title">{c.label}</span>
+                  <span className="row-sub">
+                    {pct > 0 ? `${fmt(pct, pct % 1 ? 1 : 0)}% of your mark` : "Doesn't count toward your mark"}
+                    {it.expected != null && it.count > 0 ? ` · expecting ${trim(it.expected)}%` : ex ? ` · e.g. ${ex}` : ''}
+                    {pct === 0 && it.count > 0 && (
+                      <>
+                        {' · '}
+                        <button
+                          className="inline-link"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAdjustWeights();
+                          }}
+                        >
+                          Change
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </span>
+              </div>
+
+              <span className="target-value small">{it.count}</span>
+              <Stepper value={it.count} onChange={(count) => setItem(c.key, { count })} min={0} max={20} label={`${c.label} still to come`} />
+            </div>
+            {isOpen && (
+              <div className="plan-detail">
+                <label className="row sub-row">
+                  <span className="row-main">
+                    <span className="row-title">Score I expect</span>
+                    <span className="row-sub">Leave blank to work it out</span>
+                  </span>
+                  <NumberInput
+                    value={text[c.key].expected}
+                    placeholder="—"
+                    ariaLabel={`${c.label} expected score`}
+                    className="small-num"
+                    onChange={(v) => {
+                      setText((t) => ({ ...t, [c.key]: { ...t[c.key], expected: v } }));
+                      const n = parseFloat(v);
+                      setItem(c.key, { expected: Number.isFinite(n) ? Math.min(n, 200) : null, count: Math.max(1, it.count) });
+                    }}
+                  />
+                  <span className="unit">%</span>
+                </label>
+                <label className="row sub-row">
+                  <span className="row-main">
+                    <span className="row-title">Weight of each</span>
+                    <span className="row-sub">Blank = like your other {c.label} marks (×{trim(typicalWeight(report, c.key))})</span>
+                  </span>
+                  <NumberInput
+                    value={text[c.key].weight}
+                    placeholder={trim(typicalWeight(report, c.key))}
+                    ariaLabel={`${c.label} weight`}
+                    className="small-num"
+                    onChange={(v) => {
+                      setText((t) => ({ ...t, [c.key]: { ...t[c.key], weight: v } }));
+                      const n = parseFloat(v);
+                      setItem(c.key, { weight: n > 0 ? n : null });
+                    }}
+                  />
+                  <span className="unit" />
+                </label>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
       <div className="row needed-row">
-        <Gauge value={res.kind === 'needed' ? res.percent ?? null : res.kind === 'guaranteed' ? 0 : res.kind === 'impossible' ? 100 : null} state={res.kind} />
-        {res.kind === 'needed' && (
+        {res ? (
           <>
-            <Mark value={res.percent} className="needed-mark" />
-            <span className="row-sub">needed on {what}</span>
+            <Gauge value={res.kind === 'needed' ? res.percent ?? null : res.kind === 'guaranteed' ? 0 : res.kind === 'impossible' ? 100 : null} state={res.kind} />
+            {res.kind === 'needed' && (
+              <>
+                <Mark value={res.percent} className="needed-mark" />
+                <span className="row-sub">{plan.unknown === 1 ? `needed on your ${unknownList.replace(/^1 /, '')} mark` : `needed on each of: ${unknownList}`}</span>
+              </>
+            )}
+            {res.kind === 'guaranteed' && (
+              <>
+                <span className="needed-msg good">
+                  <Icon name="check" size={20} /> You're already there
+                </span>
+                <span className="row-sub">Even 0% on what's left keeps you at {fmt(min)}% or above.</span>
+              </>
+            )}
+            {res.kind === 'impossible' && (
+              <>
+                <span className="needed-msg">Out of reach</span>
+                <span className="row-sub">100% on everything left would bring you to {fmt(max)}%.</span>
+              </>
+            )}
+            {res.kind === 'invalid' && (
+              <span className="row-sub">
+                {total ? "What's left doesn't count toward your mark, so it can't change it." : 'Add what\'s still to come above.'}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <Gauge value={projected} state="needed" />
+            {total ? (
+              <>
+                <Mark value={projected} className="needed-mark" />
+                <span className="row-sub">you'd finish with, using the scores you expect</span>
+              </>
+            ) : (
+              <span className="row-sub">Add what's still to come above.</span>
+            )}
           </>
         )}
-        {res.kind === 'guaranteed' && (
-          <>
-            <span className="needed-msg good">
-              <Icon name="check" size={20} /> Already there
-            </span>
-            <span className="row-sub">Even 0% keeps you at {fmt(res.min)}% or above.</span>
-          </>
-        )}
-        {res.kind === 'impossible' && (
-          <>
-            <span className="needed-msg">Out of reach</span>
-            <span className="row-sub">100% on {what} would bring you to {fmt(res.max)}%.</span>
-          </>
-        )}
-        {res.kind === 'invalid' && <span className="row-sub">Give the remaining evaluations a weight in at least one category.</span>}
       </div>
-      {plan.left > 0 && (
-        <button className="row" onClick={() => setShowWeights(!showWeights)} aria-expanded={showWeights}>
-          <span className="row-main">
-            <span className="row-title">{plan.left === 1 ? 'It counts as' : 'Each one counts as'}</span>
-          </span>
-          <span className="row-value">{weightSummary || 'Set weight'}</span>
-          <span className={`chev ${showWeights ? 'down' : ''}`}>
-            <Icon name="chevron" size={16} />
-          </span>
-        </button>
-      )}
-      {plan.left > 0 &&
-        showWeights &&
-        regularCats.map((c) => (
-          <label className="row sub-row" key={c.key}>
-            <span className="letter">{c.short}</span>
-            <span className="row-main">
-              <span className="row-title">{c.label}</span>
-            </span>
-            <NumberInput
-              value={weightText[c.key] ?? ''}
-              onChange={(v) => {
-                setWeightText((w) => ({ ...w, [c.key]: v }));
-                const n = parseFloat(v) || 0;
-                const next = { ...plan.weights };
-                if (n > 0) next[c.key] = n;
-                else delete next[c.key];
-                update({ weights: next });
-              }}
-              ariaLabel={`${c.label} weight`}
-              placeholder="0"
-              className="small-num"
-            />
-          </label>
-        ))}
     </Section>
   );
 }

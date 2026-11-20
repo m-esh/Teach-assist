@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { averageMark, categoryAverages, courseMark, headlineAverage, officialMark, requiredForEvaluations, requiredForTarget } from '../src/lib/calc';
+import { averageMark, categoryAverages, courseMark, headlineAverage, officialMark, requiredForEvaluations, requiredForTarget, solvePlan } from '../src/lib/calc';
 import { levelToPercent, parseCourseList, parseReport } from '../src/lib/parse';
 
 const fx = (n: string) => readFileSync(join(__dirname, 'fixtures', n), 'utf8');
@@ -198,5 +198,32 @@ describe('what do I need across several remaining evaluations', () => {
     const one = requiredForEvaluations(r, r.weights, r.assessments, [{ [k]: 10 }], 84.2).percent!;
     const three = requiredForEvaluations(r, r.weights, r.assessments, [{ [k]: 10 }, { [k]: 10 }, { [k]: 10 }], 84.2).percent!;
     expect(three).toBeLessThan(one);
+  });
+});
+
+describe('plan with marks still to come in several categories', () => {
+  const r = parseReport(fx('report-ktca.html'))!;
+  const [K, T] = r.categories;
+  const F = r.categories.find((c) => c.short === 'F')!;
+
+  it('fills in expected scores first, then solves one score for the rest', () => {
+    const entries = [
+      { key: K.key, count: 2, weight: 10, expected: null },
+      { key: T.key, count: 1, weight: 10, expected: 100 },
+      { key: F.key, count: 0, weight: 1, expected: null },
+    ];
+    const { result, unknown } = solvePlan(r, r.weights, r.assessments, entries, 85);
+    expect(unknown).toBe(2);
+    expect(result!.kind).toBe('needed');
+    const p = result!.percent!;
+    const mk = (key: string, got: number, i: number) => ({ id: `${key}${i}`, name: 'x', marks: { [key]: { got, outOf: 100, weight: 10 } } });
+    const check = courseMark(r, r.weights, [...r.assessments, mk(K.key, p, 0), mk(K.key, p, 1), mk(T.key, 100, 2)]);
+    expect(check).toBeCloseTo(85, 4);
+  });
+
+  it('just projects the final mark when every score is already expected', () => {
+    const { result, projected } = solvePlan(r, r.weights, r.assessments, [{ key: T.key, count: 1, weight: 10, expected: 100 }], 90);
+    expect(result).toBeNull();
+    expect(projected).toBeGreaterThan(courseMark(r, r.weights, r.assessments)!);
   });
 });

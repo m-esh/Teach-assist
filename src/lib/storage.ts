@@ -25,14 +25,23 @@ export interface Vault {
   neededPlans: Record<string, NeededPlan>;
 }
 
+export interface PlanItem {
+  /** How many marks are still to come in this category. */
+  count: number;
+  /** A score you already expect on each of them (%); null = solve for it. */
+  expected?: number | null;
+  /** Weight of each inside the category; null = like your other marks there. */
+  weight?: number | null;
+}
+
 export interface NeededPlan {
   target: number;
-  /** Regular evaluations still to come. */
-  left: number;
-  /** Weight of each remaining evaluation, per category. */
-  weights: Record<string, number>;
-  /** Whether a final exam/culminating task is still to come. */
-  final: boolean;
+  /** category key -> what's still to come there */
+  items?: Record<string, PlanItem>;
+  /** Older saved format (one shared count + final switch). Read once, then replaced. */
+  left?: number;
+  weights?: Record<string, number>;
+  final?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = { autoRefresh: true, hideEmptyCourses: false, relayKey: '' };

@@ -193,6 +193,38 @@ export function requiredForEvaluations(
   return { kind: 'needed', percent: hi, min, max };
 }
 
+export interface PlanEntry {
+  key: string;
+  count: number;
+  weight: number;
+  expected: number | null;
+}
+
+/**
+ * Plan with several kinds of marks still to come: entries with an expected
+ * score are filled in first, then one score is solved for all the rest.
+ */
+export function solvePlan(
+  report: Pick<CourseReport, 'categories'>,
+  weights: Record<string, number>,
+  assessments: Assessment[],
+  entries: PlanEntry[],
+  target: number,
+): { result: RequiredResult | null; projected: number | null; unknown: number } {
+  const fixed: Assessment[] = [];
+  const solve: Array<Record<string, number>> = [];
+  for (const e of entries) {
+    for (let i = 0; i < e.count; i++) {
+      if (e.expected !== null && Number.isFinite(e.expected)) {
+        fixed.push({ id: `__fixed_${e.key}_${i}`, name: 'expected', marks: { [e.key]: { got: e.expected, outOf: 100, weight: e.weight } } });
+      } else solve.push({ [e.key]: e.weight });
+    }
+  }
+  const base = [...assessments, ...fixed];
+  if (!solve.length) return { result: null, projected: courseMark(report, weights, base), unknown: 0 };
+  return { result: requiredForEvaluations(report, weights, base, solve, target), projected: null, unknown: solve.length };
+}
+
 export const fmt = (n: number | null | undefined, d = 1) =>
   n === null || n === undefined || !Number.isFinite(n) ? '—' : (Math.round(n * 10 ** d) / 10 ** d).toFixed(d);
 
