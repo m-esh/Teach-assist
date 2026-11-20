@@ -16,24 +16,21 @@ iPhone (app + your data) ──HTTPS──▶ /api/sync relay (your Cloudflare) 
 ```
 
 - Your student number, password and marks are stored **only on your phone**.
-- Browsers can't talk to TeachAssist directly, so a tiny relay (`functions/api/sync.ts`) runs on your own Cloudflare Pages project. For each sync it logs in, downloads the course list and report pages, returns the raw HTML, and forgets everything. It doesn't log or store anything, only ever contacts `ta.yrdsb.ca`, and refuses calls from other websites.
+- Browsers can't talk to TeachAssist directly, so a tiny relay (`worker/index.ts`, shared code in `shared/ta.ts`) runs on your own Cloudflare account. For each sync it logs in, downloads the course list and report pages, returns the raw HTML, and forgets everything. It doesn't log or store anything, only ever contacts `ta.yrdsb.ca`, and refuses calls from other websites.
 - The phone does all the parsing (`src/lib/parse.ts`).
 - Optional: set a `RELAY_KEY` environment variable in Cloudflare and enter the same key in the app (Settings → Advanced) so nobody else can use your relay.
 - Security headers (CSP, no framing, no referrer, noindex) are in `public/_headers`.
 
-## Deploy (one time, about 5 minutes, free)
+## Deploy (one time, free)
 
-1. Sign in at <https://dash.cloudflare.com> (create a free account if needed).
-2. Go to **Workers & Pages → Create → Pages → Connect to Git** and pick this repository.
-3. Use these build settings:
-   - **Framework preset:** None
-   - **Production branch:** `claude/jolly-goodall-zo1rxi`
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-4. Click **Save and Deploy**. You'll get a URL like `https://teach-assist-xyz.pages.dev`.
-5. On the iPhone, open that URL in **Safari**, tap **Share → Add to Home Screen**, then open it from the Home Screen and sign in.
+This repo is set up for Cloudflare Workers (`wrangler.jsonc` + `worker/index.ts`).
 
-Every push to the branch redeploys automatically, and the app picks up the new version the next time it's opened.
+1. In the Cloudflare dashboard go to **Workers & Pages → Create → Import a repository** and pick this repo.
+2. Keep the defaults: project name `teach-assist`, build command `npm run build`, deploy command `npx wrangler deploy`.
+3. Click **Deploy**. You'll get a URL like `https://teach-assist.<you>.workers.dev`.
+4. On the iPhone, open that URL in **Safari**, tap **Share → Add to Home Screen**, then open it from the Home Screen and sign in.
+
+Every push to the production branch redeploys automatically. (The `functions/` folder also lets the same repo deploy on Cloudflare Pages.)
 
 ## Development
 
