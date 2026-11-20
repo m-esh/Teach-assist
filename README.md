@@ -1,0 +1,58 @@
+# TeachAssist (private)
+
+A fast, ad-free, private TeachAssist (YRDSB) app for one person. Install it on an iPhone as a Home Screen app.
+
+- **Courses:** every course with its mark, midterm, block and room, grouped by semester, plus your current average.
+- **Course detail:** a category breakdown read from each report's own columns (K/T/C/A, Term/Attendance/Final, or the newer "Term Work {65}" expectation reports), plus every evaluation with its feedback.
+- **What-if:** add, edit or remove evaluations to see a projected mark. Changes reset when you close the app.
+- **What do I need?** shows the mark you need on the next evaluation to reach a target.
+- **Updates:** new evaluations, mark changes, midterms and average changes found on each sync.
+- **Settings:** an optional 6-digit PIN that encrypts everything on the device (AES-GCM, PBKDF2 310k). Ten wrong PINs erase the data.
+
+## How it stays private
+
+```
+iPhone (app + your data) ──HTTPS──▶ /api/sync relay (your Cloudflare) ──HTTPS──▶ ta.yrdsb.ca
+```
+
+- Your student number, password and marks are stored **only on your phone**.
+- Browsers can't talk to TeachAssist directly, so a tiny relay (`functions/api/sync.ts`) runs on your own Cloudflare Pages project. For each sync it logs in, downloads the course list and report pages, returns the raw HTML, and forgets everything. It doesn't log or store anything, only ever contacts `ta.yrdsb.ca`, and refuses calls from other websites.
+- The phone does all the parsing (`src/lib/parse.ts`).
+- Optional: set a `RELAY_KEY` environment variable in Cloudflare and enter the same key in the app (Settings → Advanced) so nobody else can use your relay.
+- Security headers (CSP, no framing, no referrer, noindex) are in `public/_headers`.
+
+## Deploy (one time, about 5 minutes, free)
+
+1. Sign in at <https://dash.cloudflare.com> (create a free account if needed).
+2. Go to **Workers & Pages → Create → Pages → Connect to Git** and pick this repository.
+3. Use these build settings:
+   - **Framework preset:** None
+   - **Production branch:** `claude/jolly-goodall-zo1rxi`
+   - **Build command:** `npm run build`
+   - **Build output directory:** `dist`
+4. Click **Save and Deploy**. You'll get a URL like `https://teach-assist-xyz.pages.dev`.
+5. On the iPhone, open that URL in **Safari**, tap **Share → Add to Home Screen**, then open it from the Home Screen and sign in.
+
+Every push to the branch redeploys automatically, and the app picks up the new version the next time it's opened.
+
+## Development
+
+```bash
+npm install
+npm run dev     # app + relay at http://localhost:5173
+npm test        # parser / calculator / relay / updates tests
+npm run build   # type-check + production build
+```
+
+The test fixtures in `tests/fixtures` are synthetic pages that copy TeachAssist's layouts with made-up data. **Never commit real TeachAssist pages:** they contain your student number. `samples/` and `*.pdf` are git-ignored for that reason.
+
+## Mark calculation
+
+TeachAssist's formula, implemented in `src/lib/calc.ts`:
+
+- **Category average** = Σ(mark / out-of × weight) ÷ Σ weight, over counted evaluations. Evaluations that are pink (not handed in) or "No Mark" are skipped.
+- **Course mark** = Σ(category average × course weighting) ÷ Σ weighting, over categories that have marks.
+
+When TeachAssist doesn't publish category weightings, the app works them out from the printed course mark where it can. Otherwise it estimates them and labels them as estimated. You can correct them per course under **Weightings**, and those corrections are saved.
+
+Not affiliated with YRDSB or the teachassist foundation.
