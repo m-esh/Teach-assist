@@ -52,6 +52,8 @@ export interface Course {
   end: string;
   listMark: number | null;
   midterm: number | null;
+  /** Final mark printed on the course list once a course is finished. */
+  final?: number | null;
   report?: CourseReport;
   reportError?: string;
 }

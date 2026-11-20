@@ -103,29 +103,51 @@ async function getPage(path: string, cookie: string, fetchFn: FetchFn): Promise<
   return text;
 }
 
-export function extractSubjectIds(listHtml: string): string[] {
-  const ids = new Set<string>();
-  const re = /viewReport\.php\?subject_id=(\d+)/g;
+export interface ReportLink {
+  id: string;
+  /** Path on ta.yrdsb.ca, always under /live/students/ */
+  path: string;
+}
+
+/**
+ * Every report link on the course list, whatever page it points to
+ * (viewReport.php for classic reports; newer report types use other pages).
+ * Only plain, same-folder PHP links with safe query strings are accepted.
+ */
+export function extractReportLinks(listHtml: string): ReportLink[] {
+  const out = new Map<string, ReportLink>();
+  const re = /href\s*=\s*["']?([^"'\s>]*subject_id=(\d+)[^"'\s>]*)/gi;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(listHtml))) ids.add(m[1]);
-  return [...ids].slice(0, 30);
+  while ((m = re.exec(listHtml))) {
+    const href = m[1].replace(/&amp;/g, '&');
+    const id = m[2];
+    const ok = href.match(/^(?:\/live\/students\/|\.\/)?([A-Za-z0-9_]+\.php)\?([A-Za-z0-9_=&.%-]+)$/);
+    if (!ok || out.has(id)) continue;
+    out.set(id, { id, path: `/live/students/${ok[1]}?${ok[2]}` });
+  }
+  return [...out.values()].slice(0, 30);
+}
+
+/** Kept for callers/tests that only need the ids. */
+export function extractSubjectIds(listHtml: string): string[] {
+  return extractReportLinks(listHtml).map((l) => l.id);
 }
 
 export async function syncTeachAssist(username: string, password: string, fetchFn: FetchFn = fetch): Promise<SyncPayload> {
   const { token, studentId } = await login(username, password, fetchFn);
   const cookie = `session_token=${token}; student_id=${studentId}`;
   const listHtml = await getPage(`/live/students/listReports.php?student_id=${studentId}`, cookie, fetchFn);
-  if (!/listReports|Student Reports|viewReport\.php|Course Name/i.test(listHtml)) {
+  if (!/listReports|Student Reports|subject_id=|Course Name/i.test(listHtml)) {
     throw new TAError('TeachAssist returned a page this app does not recognise.', 502, 'unexpected');
   }
-  const ids = extractSubjectIds(listHtml);
+  const links = extractReportLinks(listHtml);
   const reports: Record<string, string> = {};
   const failed: string[] = [];
   // Two at a time with one retry: gentle on TeachAssist and resilient to a flaky page.
-  const queue = [...ids];
+  const queue = [...links];
   const worker = async () => {
-    for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
-      const path = `/live/students/viewReport.php?subject_id=${id}&student_id=${studentId}`;
+    for (let link = queue.shift(); link !== undefined; link = queue.shift()) {
+      const { id, path } = link;
       try {
         reports[id] = await getPage(path, cookie, fetchFn);
       } catch {

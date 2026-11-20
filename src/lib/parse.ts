@@ -113,6 +113,7 @@ export function parseCourseList(html: string): Course[] {
     const markText = text(cells[2]);
     const midterm = markText.match(/MIDTERM\s*MARK\s*:?\s*(\d+(?:\.\d+)?)\s*%/i);
     const current = markText.match(/current\s*mark\s*=?\s*(\d+(?:\.\d+)?)\s*%/i);
+    const final = markText.match(/FINAL\s*MARK\s*:?\s*(\d+(?:\.\d+)?)\s*%/i);
     const link = tr.querySelector('a[href*="subject_id"]');
     const subjectId = link?.getAttribute('href')?.match(/subject_id=(\d+)/)?.[1];
 
@@ -131,6 +132,7 @@ export function parseCourseList(html: string): Course[] {
       end: dates?.[2] ?? '',
       listMark: current ? num(current[1]) : null,
       midterm: midterm ? num(midterm[1]) : null,
+      final: final ? num(final[1]) : null,
     });
   }
   return courses;

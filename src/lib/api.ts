@@ -24,7 +24,9 @@ export function buildSnapshot(payload: SyncPayload): Snapshot {
     if (c.id.startsWith('code:')) continue;
     const html = payload.reports[c.id];
     if (!html) {
-      if (payload.failed.includes(c.id)) c.reportError = 'Could not download this report from TeachAssist.';
+      c.reportError = payload.failed.includes(c.id)
+        ? 'Could not download this report from TeachAssist.'
+        : "TeachAssist didn't send this course's detailed report.";
       continue;
     }
     try {

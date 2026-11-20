@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { categoryAverages, courseMark, officialMark, requiredForTarget } from '../src/lib/calc';
+import { averageMark, categoryAverages, courseMark, headlineAverage, officialMark, requiredForTarget } from '../src/lib/calc';
 import { levelToPercent, parseCourseList, parseReport } from '../src/lib/parse';
 
 const fx = (n: string) => readFileSync(join(__dirname, 'fixtures', n), 'utf8');
@@ -148,5 +148,31 @@ describe('expectations report whose tasks cannot be read', () => {
     const course = { ...parseCourseList(fx('list.html'))[3], report: r };
     expect(course.listMark).toBe(0);
     expect(officialMark(course)).toBe(99.3);
+  });
+});
+
+describe('average uses final, then current, then midterm marks', () => {
+  const courses = parseCourseList(fx('list.html'));
+  const finished = parseCourseList(`<table><tr><td>Sample High School - ENG3U1-1 : English<br>Block: P2 - rm. 101</td>
+    <td>2026-02-03 ~ 2026-06-26</td><td>FINAL MARK: 93%<br><span>MIDTERM MARK: 88%</span></td></tr></table>`)[0];
+
+  it('reads final marks from the course list', () => {
+    expect(finished).toMatchObject({ code: 'ENG3U1-1', final: 93, midterm: 88, listMark: null });
+  });
+
+  it('picks the right mark for each course', () => {
+    expect(averageMark(finished)).toBe(93);
+    expect(averageMark(courses[0])).toBe(91); // night-school Physics: midterm only
+    expect(averageMark(courses[2])).toBe(84.2); // current mark wins over the 80% midterm
+    expect(averageMark(courses[1])).toBeNull(); // no marks at all
+  });
+
+  it('counts midterm-only courses in the semester average', () => {
+    const avg = headlineAverage(courses, new Date('2026-11-20T12:00:00'));
+    // Physics 91 (midterm), MHF 84.2 (current), TDJ: the list's 0.0% isn't trusted
+    // without a readable report, so its 95% midterm counts instead.
+    expect(avg.count).toBe(3);
+    expect(avg.midterms).toBe(2);
+    expect(avg.value).toBeCloseTo((91 + 84.2 + 95) / 3, 6);
   });
 });

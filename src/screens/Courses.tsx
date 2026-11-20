@@ -1,4 +1,4 @@
-import { fmt, headlineAverage, isActive, officialMark } from '../lib/calc';
+import { averageMark, fmt, headlineAverage, isActive, officialMark } from '../lib/calc';
 import type { Course } from '../lib/types';
 import { useStore } from '../store';
 import { GlassButton, Icon, Mark, NavBar, Ring, Section, SubjectIcon, timeAgo } from '../components/ui';
@@ -41,7 +41,7 @@ export function CoursesScreen({ onOpen }: { onOpen(id: string): void }) {
   const { vault, syncing, syncError, sync } = useStore();
   const snap = vault.snapshot;
   const all = snap?.courses ?? [];
-  const courses = vault.settings.hideEmptyCourses ? all.filter((c) => officialMark(c) !== null || c.midterm !== null) : all;
+  const courses = vault.settings.hideEmptyCourses ? all.filter((c) => averageMark(c) !== null) : all;
   const avg = headlineAverage(all);
   const groups = groupCourses(courses);
   const schoolCounts = new Map<string, number>();
@@ -76,7 +76,10 @@ export function CoursesScreen({ onOpen }: { onOpen(id: string): void }) {
           <span className="ring-caption">{avg.scope === 'current' ? 'Average' : 'Overall'}</span>
         </Ring>
         <div className="hero-note">
-          {avg.count} course{avg.count === 1 ? '' : 's'} with a mark{avg.scope === 'current' ? ' this semester' : ''}
+          {avg.count} course{avg.count === 1 ? '' : 's'}
+          {avg.scope === 'current' ? ' this semester' : ''}
+          {avg.midterms + avg.finals > 0 &&
+            ` · ${[avg.finals && `${avg.finals} final`, avg.midterms && `${avg.midterms} midterm${avg.midterms === 1 ? '' : 's'}`].filter(Boolean).join(', ')} included`}
         </div>
       </section>
 
@@ -109,7 +112,12 @@ function CourseRow({ course: c, onOpen, mainSchool, index }: { course: Course; o
         {c.school && c.school !== mainSchool && <span className="row-sub faint">{c.school}</span>}
       </span>
       <span className="row-end">
-        {mark !== null ? (
+        {c.final !== null && c.final !== undefined ? (
+          <>
+            <Mark value={c.final} digits={0} className="row-mark" />
+            <span className="row-tag">Final</span>
+          </>
+        ) : mark !== null ? (
           <>
             <Mark value={mark} className="row-mark" />
             <span className="mini-bar">

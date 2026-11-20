@@ -107,11 +107,30 @@ export function officialMark(course: Course): number | null {
     // Couldn't read the evaluations: TeachAssist's own Term Work figure beats the list page.
     if (r.format === 'expectations' && r.reportedAverages?.term !== undefined) return r.reportedAverages.term;
   }
+  // TeachAssist's list shows "current mark = 0.0%" for some report types even
+  // when the real mark is high. Without a readable report, that 0 isn't a mark.
+  if (course.listMark === 0 && !r?.assessments.some((a) => Object.keys(a.marks).length)) return null;
   return course.listMark;
 }
 
+/**
+ * The mark a course contributes to your average: its final mark once there is
+ * one, else its current mark, else its midterm (so a course whose only mark is
+ * a midterm still counts until a newer mark replaces it).
+ */
+export function averageMark(course: Course): number | null {
+  return course.final ?? officialMark(course) ?? course.midterm ?? null;
+}
+
+export type MarkSource = 'final' | 'current' | 'midterm' | null;
+export function averageSource(course: Course): MarkSource {
+  if (course.final !== null && course.final !== undefined) return 'final';
+  if (officialMark(course) !== null) return 'current';
+  return course.midterm !== null ? 'midterm' : null;
+}
+
 export function overallAverage(courses: Course[]): number | null {
-  const marks = courses.map(officialMark).filter((m): m is number => m !== null);
+  const marks = courses.map(averageMark).filter((m): m is number => m !== null);
   return marks.length ? marks.reduce((a, b) => a + b, 0) / marks.length : null;
 }
 
@@ -171,10 +190,19 @@ export function isActive(c: Course, now = new Date()): boolean {
 }
 
 /** Average of the courses running right now (falls back to every course with a mark). */
-export function headlineAverage(courses: Course[], now = new Date()): { value: number | null; count: number; scope: 'current' | 'all' } {
-  const active = courses.filter((c) => isActive(c, now) && officialMark(c) !== null);
-  const pool = active.length ? active : courses.filter((c) => officialMark(c) !== null);
-  return { value: overallAverage(pool), count: pool.length, scope: active.length ? 'current' : 'all' };
+export function headlineAverage(
+  courses: Course[],
+  now = new Date(),
+): { value: number | null; count: number; scope: 'current' | 'all'; midterms: number; finals: number } {
+  const active = courses.filter((c) => isActive(c, now) && averageMark(c) !== null);
+  const pool = active.length ? active : courses.filter((c) => averageMark(c) !== null);
+  return {
+    value: overallAverage(pool),
+    count: pool.length,
+    scope: active.length ? 'current' : 'all',
+    midterms: pool.filter((c) => averageSource(c) === 'midterm').length,
+    finals: pool.filter((c) => averageSource(c) === 'final').length,
+  };
 }
 
 /** The report with any weight corrections the user saved applied. */

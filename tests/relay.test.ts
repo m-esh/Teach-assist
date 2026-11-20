@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractSubjectIds, handleSyncRequest } from '../shared/ta';
+import { extractReportLinks, extractSubjectIds, handleSyncRequest } from '../shared/ta';
 
 function fakeTA(opts: { goodPassword: string }) {
   const calls: string[] = [];
@@ -71,6 +71,20 @@ describe('relay', () => {
   });
 
   it('only extracts numeric subject ids', () => {
-    expect(extractSubjectIds('viewReport.php?subject_id=5&x viewReport.php?subject_id=../../etc viewReport.php?subject_id=5')).toEqual(['5']);
+    expect(
+      extractSubjectIds('<a href="viewReport.php?subject_id=5&x=1">a</a><a href="viewReport.php?subject_id=../../etc">b</a><a href="viewReport.php?subject_id=5">c</a>'),
+    ).toEqual(['5']);
+  });
+
+  it('follows report links of any type, but only safe same-folder PHP pages', () => {
+    const html = `
+      <a href="viewReport.php?subject_id=11&amp;student_id=7">classic</a>
+      <a href='viewReportOE.php?subject_id=22&student_id=7'>expectations</a>
+      <a href="https://evil.example/x.php?subject_id=33">external</a>
+      <a href="../../admin/x.php?subject_id=44">escape</a>`;
+    expect(extractReportLinks(html)).toEqual([
+      { id: '11', path: '/live/students/viewReport.php?subject_id=11&student_id=7' },
+      { id: '22', path: '/live/students/viewReportOE.php?subject_id=22&student_id=7' },
+    ]);
   });
 });
