@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
-import { Icon } from '../components/ui';
+import { HapticTarget, Icon } from '../components/ui';
 import { bioEnabled } from '../lib/storage';
 import { haptic } from '../lib/haptics';
 
@@ -40,11 +40,13 @@ export function PinPad({ onComplete, error }: { onComplete(pin: string): void | 
           <button key={d} onClick={() => void press(d)} aria-label={d}>
             <span className="digit">{d}</span>
             <span className="letters">{letters}</span>
+            <HapticTarget />
           </button>
         ))}
         <span />
         <button onClick={() => void press('0')} aria-label="0">
           <span className="digit">0</span>
+          <HapticTarget />
         </button>
         <button onClick={() => setPin(pin.slice(0, -1))} aria-label="Delete" className="pin-del">
           {pin.length ? 'Delete' : ''}

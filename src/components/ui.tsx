@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { fmt } from '../lib/calc';
-import { haptic } from '../lib/haptics';
+import { haptic, isIOS } from '../lib/haptics';
 
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -32,6 +32,17 @@ export function useCountUp(target: number | null | undefined, ms = 900): number 
     return () => cancelAnimationFrame(raf);
   }, [target, ms]);
   return v;
+}
+
+/** iPhone haptic tap layer; place inside a pressable element (made position: relative by CSS). */
+const switchAttr = { switch: '' } as Record<string, string>;
+export function HapticTarget() {
+  if (!isIOS()) return null;
+  return (
+    <label className="haptic-hit" data-haptic-trigger="" aria-hidden="true">
+      <input type="checkbox" {...switchAttr} tabIndex={-1} onClick={(e) => e.stopPropagation()} />
+    </label>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -105,6 +116,7 @@ export function GlassButton({
       aria-label={label}
     >
       {children}
+      <HapticTarget />
     </button>
   );
 }
@@ -159,6 +171,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
         onChange(!checked);
       }}>
       <span />
+      <HapticTarget />
     </button>
   );
 }
@@ -181,6 +194,7 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
         >
           {icon && <Icon name={icon} size={16} />}
           {l}
+          <HapticTarget />
         </button>
       ))}
     </div>
@@ -199,6 +213,7 @@ export function Stepper({ value, onChange, min = 0, max = 100, step = 1, label }
         disabled={value <= min}
       >
         <Icon name="minus" size={18} />
+        <HapticTarget />
       </button>
       <button
         aria-label={`Increase ${label}`}
@@ -209,6 +224,7 @@ export function Stepper({ value, onChange, min = 0, max = 100, step = 1, label }
         disabled={value >= max}
       >
         <Icon name="plus" size={18} />
+        <HapticTarget />
       </button>
     </div>
   );

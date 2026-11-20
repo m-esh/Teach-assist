@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type PointerEvent as RPointerEvent } from 'react';
-import { Icon } from './ui';
+import { HapticTarget, Icon } from './ui';
 import { haptic } from '../lib/haptics';
 
 export interface TabDef<T extends string> {
@@ -120,15 +120,23 @@ export function TabBar<T extends string>({ tabs, active, onSelect }: { tabs: Tab
 
   const onDown = (e: RPointerEvent) => {
     if (e.button !== 0) return;
+    // Capture the pointer only once a drag starts, so a plain tap reaches the
+    // tab itself (needed for the iPhone haptic layer).
     drag.current = { id: e.pointerId, startX: e.clientX, hover: idx, moved: false };
-    nav.current?.setPointerCapture(e.pointerId);
     pill.current?.classList.add('lens');
     nav.current?.classList.add('dragging');
     follow(localX(e), true);
   };
   const onMove = (e: RPointerEvent) => {
     if (!drag.current || e.pointerId !== drag.current.id) return;
-    if (Math.abs(e.clientX - drag.current.startX) > 6) drag.current.moved = true;
+    if (!drag.current.moved && Math.abs(e.clientX - drag.current.startX) > 6) {
+      drag.current.moved = true;
+      try {
+        nav.current?.setPointerCapture(e.pointerId);
+      } catch {
+        /* pointer already released */
+      }
+    }
     follow(localX(e), false);
   };
   const onUp = (e: RPointerEvent) => {
@@ -174,6 +182,7 @@ export function TabBar<T extends string>({ tabs, active, onSelect }: { tabs: Tab
             {!!t.badge && <span className="badge">{t.badge > 99 ? '99+' : t.badge}</span>}
           </span>
           <span className="tab-label">{t.label}</span>
+          <HapticTarget />
         </button>
       ))}
     </nav>

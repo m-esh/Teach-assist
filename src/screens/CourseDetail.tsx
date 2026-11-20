@@ -12,7 +12,7 @@ import {
 } from '../lib/calc';
 import type { Assessment, CatMark, Course, CourseReport } from '../lib/types';
 import { emptyWhatIf, useStore, type WhatIf } from '../store';
-import { Delta, GlassButton, Icon, Mark, MiniRing, NavBar, NumberInput, Ring, Section, Sheet, Stepper, TrendChart } from '../components/ui';
+import { Delta, GlassButton, HapticTarget, Icon, Mark, MiniRing, NavBar, NumberInput, Ring, Section, Sheet, Stepper, TrendChart } from '../components/ui';
 import type { PlanItem } from '../lib/storage';
 import { haptic } from '../lib/haptics';
 import { displayName } from './Courses';
@@ -115,6 +115,7 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
                 }}
               >
                 <Icon name="undo" size={15} /> Reset
+                <HapticTarget />
               </button>
             </>
           ) : (
@@ -191,6 +192,7 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
                 <span className="round-btn add">
                   <Icon name="plus" size={14} />
                 </span>
+                <HapticTarget />
                 <span className="row-title accent">Add an evaluation</span>
               </button>
             )}
@@ -299,6 +301,7 @@ function EvalCell({
             onToggle();
           }} aria-label={restoring ? `Restore ${a.name}` : `Remove ${a.name}`}>
           <Icon name={restoring ? 'undo' : 'minus'} size={14} />
+          <HapticTarget />
         </button>
       )}
       <button

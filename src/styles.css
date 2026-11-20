@@ -1970,3 +1970,37 @@ button.row:active:not(:disabled),
   margin-top: -4px;
   animation: fade 0.3s ease both;
 }
+
+/* iPhone haptics: an invisible tap layer over each pressable control, wired to
+   a hidden native switch (see lib/haptics.ts). */
+.glass-btn,
+.segmented button,
+.stepper button,
+.tab,
+.swatch,
+.pin-keys button,
+.round-btn,
+.pill-btn,
+.btn-primary,
+.add-row {
+  position: relative;
+}
+.haptic-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+.haptic-hit input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  visibility: hidden;
+}
+:root[data-haptics='off'] .haptic-hit {
+  display: none;
+}

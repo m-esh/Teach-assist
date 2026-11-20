@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { Icon } from '../components/ui';
+import { HapticTarget, Icon } from '../components/ui';
 
 export function LoginScreen() {
   const { signIn } = useStore();
@@ -11,8 +11,8 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
     if (!username.trim() || !password || busy) return;
     setBusy(true);
     setError('');
@@ -53,8 +53,9 @@ export function LoginScreen() {
           )}
         </div>
         {error && <div className="form-error">{error}</div>}
-        <button className="btn-primary" disabled={busy || !username.trim() || !password}>
+        <button type="button" className="btn-primary" disabled={busy || !username.trim() || !password} onClick={() => void submit()}>
           {busy ? <span className="spinner" aria-label="Signing in" /> : 'Sign In'}
+          <HapticTarget />
         </button>
         {!showAdvanced && (
           <button type="button" className="text-btn" onClick={() => setShowAdvanced(true)}>

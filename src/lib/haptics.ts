@@ -1,32 +1,22 @@
 /**
- * Haptic feedback for a web app.
+ * Haptic feedback.
  *
- * iPhone: Safari has no vibration API, but since iOS 18 toggling a native
- * `<input type="checkbox" switch>` plays the system haptic tick. We keep one
- * hidden switch and flip it. It must happen inside a tap handler, which is
- * where all calls come from.
- * Android: the standard Vibration API.
+ * iPhone: Safari has no vibration API. Since iOS 18 a native
+ * `<input type="checkbox" switch>` plays the system haptic tick when it is
+ * toggled by a real tap (programmatic clicks stay silent). So pressable
+ * controls render <HapticTarget/>: an invisible label over the control,
+ * wired to a hidden switch. Your tap hits the label, the switch flips (tick),
+ * and the click still reaches the control as normal.
+ *
+ * Android: the standard Vibration API via haptic().
  */
 import { loadLook } from './theme';
 
 export type Haptic = 'light' | 'medium' | 'error' | 'success';
 
-let label: HTMLLabelElement | null = null;
-
-function hiddenSwitch(): HTMLLabelElement {
-  if (label && label.isConnected) return label;
-  const l = document.createElement('label');
-  l.setAttribute('aria-hidden', 'true');
-  l.style.cssText = 'position:fixed;left:-200px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;';
-  const input = document.createElement('input');
-  input.type = 'checkbox';
-  input.setAttribute('switch', '');
-  input.tabIndex = -1;
-  l.appendChild(input);
-  document.body.appendChild(l);
-  label = l;
-  return l;
-}
+export const isIOS = () =>
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 const PATTERNS: Record<Haptic, number | number[]> = {
   light: 8,
@@ -35,17 +25,17 @@ const PATTERNS: Record<Haptic, number | number[]> = {
   error: [18, 70, 18],
 };
 
+/** Vibration for platforms that support it (Android). iPhone uses HapticTarget. */
 export function haptic(kind: Haptic = 'light') {
   try {
-    if (!loadLook().haptics) return;
-    if (typeof navigator.vibrate === 'function') {
-      navigator.vibrate(PATTERNS[kind]);
-      return;
-    }
-    const l = hiddenSwitch();
-    l.click();
-    if (kind === 'error' || kind === 'success') setTimeout(() => l.click(), kind === 'error' ? 110 : 80);
+    if (!loadLook().haptics || isIOS() || typeof navigator.vibrate !== 'function') return;
+    navigator.vibrate(PATTERNS[kind]);
   } catch {
     /* haptics are a nicety */
   }
+}
+
+/** Reflects the Haptics setting on <html> so the iPhone tap layers can be turned off. */
+export function applyHapticsSetting(on: boolean) {
+  document.documentElement.dataset.haptics = on ? 'on' : 'off';
 }

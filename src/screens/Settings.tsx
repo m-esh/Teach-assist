@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { Icon, IconTile, NavBar, Section, Segmented, Sheet, Toggle, timeAgo } from '../components/ui';
+import { HapticTarget, Icon, IconTile, NavBar, Section, Segmented, Sheet, Toggle, timeAgo } from '../components/ui';
 import { PinPad } from './Lock';
 import { THEMES, loadLook, saveLook, type Appearance, type Look, type ThemeName } from '../lib/theme';
-import { haptic } from '../lib/haptics';
+import { applyHapticsSetting, haptic } from '../lib/haptics';
 
 export function SettingsScreen() {
   const s = useStore();
@@ -45,6 +45,7 @@ export function SettingsScreen() {
               >
                 <span>{look.theme === t && <Icon name="check" size={16} />}</span>
                 <em>{THEMES[t].name}</em>
+                <HapticTarget />
               </button>
             ))}
           </div>
@@ -75,6 +76,7 @@ export function SettingsScreen() {
             checked={look.haptics}
             onChange={(on) => {
               updateLook({ haptics: on });
+              applyHapticsSetting(on);
               if (on) haptic('success');
             }}
           />

@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import { applyLook, loadLook } from './lib/theme';
+import { applyHapticsSetting } from './lib/haptics';
 
 applyLook(loadLook());
+applyHapticsSetting(loadLook().haptics);
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyLook(loadLook()));
 
 createRoot(document.getElementById('root')!).render(
