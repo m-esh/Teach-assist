@@ -14,6 +14,7 @@ import type { Assessment, CatMark, Course, CourseReport } from '../lib/types';
 import { emptyWhatIf, useStore, type WhatIf } from '../store';
 import { Delta, GlassButton, Icon, Mark, MiniRing, NavBar, NumberInput, Ring, Section, Sheet, Stepper, TrendChart } from '../components/ui';
 import type { PlanItem } from '../lib/storage';
+import { haptic } from '../lib/haptics';
 import { displayName } from './Courses';
 
 function applyWhatIf(report: CourseReport, w: WhatIf): Assessment[] {
@@ -106,7 +107,13 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
               <span className="pill">
                 TeachAssist {fmt(official)}% <Delta from={official ?? baseCalc} to={shownProjected} />
               </span>
-              <button className="pill pill-btn" onClick={() => setWhatIf(emptyWhatIf())}>
+              <button
+                className="pill pill-btn"
+                onClick={() => {
+                  haptic('medium');
+                  setWhatIf(emptyWhatIf());
+                }}
+              >
                 <Icon name="undo" size={15} /> Reset
               </button>
             </>
@@ -233,6 +240,7 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
           initial={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onSave={(a) => {
+            haptic('success');
             if (editing === 'new') setWhatIf({ ...whatIf, added: [...whatIf.added, a] });
             else if (a.hypothetical) setWhatIf({ ...whatIf, added: whatIf.added.map((x) => (x.id === a.id ? a : x)) });
             else setWhatIf({ ...whatIf, edited: { ...whatIf.edited, [a.id]: a } });
@@ -284,7 +292,12 @@ function EvalCell({
   return (
     <div className={`row eval-row ${removed ? 'removed' : ''} ${editMode ? 'editing' : ''}`}>
       {editMode && (
-        <button className={`round-btn ${restoring ? 'restore' : 'remove'}`} onClick={onToggle} aria-label={restoring ? `Restore ${a.name}` : `Remove ${a.name}`}>
+        <button
+          className={`round-btn ${restoring ? 'restore' : 'remove'}`}
+          onClick={() => {
+            haptic('medium');
+            onToggle();
+          }} aria-label={restoring ? `Restore ${a.name}` : `Remove ${a.name}`}>
           <Icon name={restoring ? 'undo' : 'minus'} size={14} />
         </button>
       )}

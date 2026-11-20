@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { Icon, IconTile, NavBar, Section, Segmented, Sheet, Toggle, timeAgo } from '../components/ui';
 import { PinPad } from './Lock';
 import { THEMES, loadLook, saveLook, type Appearance, type Look, type ThemeName } from '../lib/theme';
+import { haptic } from '../lib/haptics';
 
 export function SettingsScreen() {
   const s = useStore();
@@ -37,7 +38,10 @@ export function SettingsScreen() {
                 aria-label={THEMES[t].name}
                 className={`swatch ${look.theme === t ? 'on' : ''}`}
                 data-swatch={t}
-                onClick={() => updateLook({ theme: t })}
+                onClick={() => {
+                  if (t !== look.theme) haptic('light');
+                  updateLook({ theme: t });
+                }}
               >
                 <span>{look.theme === t && <Icon name="check" size={16} />}</span>
                 <em>{THEMES[t].name}</em>
@@ -55,6 +59,24 @@ export function SettingsScreen() {
               ['light', 'Light', 'sun'],
               ['dark', 'Dark', 'moon'],
             ]}
+          />
+        </div>
+      </Section>
+
+      <Section header="Feel">
+        <div className="row">
+          <IconTile name="wave" color="linear-gradient(150deg,#ff8ab5,#e8457f)" />
+          <span className="row-main">
+            <span className="row-title">Haptics</span>
+            <span className="row-sub">Small taps when you use controls</span>
+          </span>
+          <Toggle
+            label="Haptics"
+            checked={look.haptics}
+            onChange={(on) => {
+              updateLook({ haptics: on });
+              if (on) haptic('success');
+            }}
           />
         </div>
       </Section>

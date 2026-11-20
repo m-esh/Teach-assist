@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { Icon } from '../components/ui';
 import { bioEnabled } from '../lib/storage';
+import { haptic } from '../lib/haptics';
 
 const LEN = 6;
 
@@ -10,6 +11,7 @@ export function PinPad({ onComplete, error }: { onComplete(pin: string): void | 
   const [busy, setBusy] = useState(false);
   const press = async (d: string) => {
     if (busy) return;
+    haptic('light');
     const next = (pin + d).slice(0, LEN);
     setPin(next);
     if (next.length === LEN) {
@@ -107,6 +109,7 @@ export function LockScreen() {
         error={error || bioMsg}
         onComplete={async (pin) => {
           const e = await unlock(pin);
+          if (e) haptic('error');
           setError(e ?? '');
         }}
       />

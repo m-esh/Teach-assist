@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { fmt } from '../lib/calc';
+import { haptic } from '../lib/haptics';
 
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -94,7 +95,15 @@ export function GlassButton({
   wide?: boolean;
 }) {
   return (
-    <button className={`glass-btn ${prominent ? 'prominent' : ''} ${wide ? 'wide' : ''}`} onClick={onClick} disabled={disabled} aria-label={label}>
+    <button
+      className={`glass-btn ${prominent ? 'prominent' : ''} ${wide ? 'wide' : ''}`}
+      onClick={() => {
+        haptic('light');
+        onClick();
+      }}
+      disabled={disabled}
+      aria-label={label}
+    >
       {children}
     </button>
   );
@@ -145,7 +154,10 @@ export function IconTile({ name, color }: { name: string; color: string }) {
 
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange(v: boolean): void; label: string }) {
   return (
-    <button role="switch" aria-checked={checked} aria-label={label} className={`toggle ${checked ? 'on' : ''}`} onClick={() => onChange(!checked)}>
+    <button role="switch" aria-checked={checked} aria-label={label} className={`toggle ${checked ? 'on' : ''}`} onClick={() => {
+        haptic('light');
+        onChange(!checked);
+      }}>
       <span />
     </button>
   );
@@ -157,7 +169,16 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
     <div className="segmented" role="radiogroup" aria-label={label} style={{ ['--n' as string]: options.length, ['--i' as string]: idx }}>
       <span className="seg-thumb" />
       {options.map(([v, l, icon]) => (
-        <button key={v} role="radio" aria-checked={v === value} className={v === value ? 'on' : ''} onClick={() => onChange(v)}>
+        <button
+          key={v}
+          role="radio"
+          aria-checked={v === value}
+          className={v === value ? 'on' : ''}
+          onClick={() => {
+            if (v !== value) haptic('light');
+            onChange(v);
+          }}
+        >
           {icon && <Icon name={icon} size={16} />}
           {l}
         </button>
@@ -169,10 +190,24 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
 export function Stepper({ value, onChange, min = 0, max = 100, step = 1, label }: { value: number; onChange(v: number): void; min?: number; max?: number; step?: number; label: string }) {
   return (
     <div className="stepper" role="group" aria-label={label}>
-      <button aria-label={`Decrease ${label}`} onClick={() => onChange(Math.max(min, value - step))} disabled={value <= min}>
+      <button
+        aria-label={`Decrease ${label}`}
+        onClick={() => {
+          haptic('light');
+          onChange(Math.max(min, value - step));
+        }}
+        disabled={value <= min}
+      >
         <Icon name="minus" size={18} />
       </button>
-      <button aria-label={`Increase ${label}`} onClick={() => onChange(Math.min(max, value + step))} disabled={value >= max}>
+      <button
+        aria-label={`Increase ${label}`}
+        onClick={() => {
+          haptic('light');
+          onChange(Math.min(max, value + step));
+        }}
+        disabled={value >= max}
+      >
         <Icon name="plus" size={18} />
       </button>
     </div>
@@ -451,6 +486,7 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  wave: <path d="M3 12h2.5l2-5 3 10 3-12 3 9 2-2H21" />,
   faceid: (
     <>
       <path d="M4 8V6.5A2.5 2.5 0 0 1 6.5 4H8M16 4h1.5A2.5 2.5 0 0 1 20 6.5V8M20 16v1.5a2.5 2.5 0 0 1-2.5 2.5H16M8 20H6.5A2.5 2.5 0 0 1 4 17.5V16" />

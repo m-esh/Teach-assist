@@ -20,10 +20,11 @@ export type Appearance = 'system' | 'dark' | 'light';
 export interface Look {
   theme: ThemeName;
   appearance: Appearance;
+  haptics: boolean;
 }
 
 const KEY = 'ta.look';
-export const DEFAULT_LOOK: Look = { theme: 'purple', appearance: 'system' };
+export const DEFAULT_LOOK: Look = { theme: 'purple', appearance: 'system', haptics: true };
 
 export function loadLook(): Look {
   try {
@@ -31,6 +32,7 @@ export function loadLook(): Look {
     return {
       theme: v.theme && v.theme in THEMES ? v.theme : DEFAULT_LOOK.theme,
       appearance: v.appearance === 'dark' || v.appearance === 'light' ? v.appearance : 'system',
+      haptics: v.haptics !== false,
     };
   } catch {
     return DEFAULT_LOOK;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type PointerEvent as RPointerEvent } from 'react';
 import { Icon } from './ui';
+import { haptic } from '../lib/haptics';
 
 export interface TabDef<T extends string> {
   id: T;
@@ -104,6 +105,7 @@ export function TabBar<T extends string>({ tabs, active, onSelect }: { tabs: Tab
     const hover = nearest(x);
     if (drag.current && hover !== drag.current.hover) {
       drag.current.hover = hover;
+      haptic('light');
       items.current.forEach((el, i) => el?.classList.toggle('hover', i === hover));
     }
   };
