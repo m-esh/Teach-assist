@@ -24,13 +24,13 @@ export function LoginScreen() {
   return (
     <div className="login">
       <div className="login-head">
-        <img src="/icon.svg" alt="" className="login-logo" width={76} height={76} />
+        <img src="/icon.svg" alt="" className="login-logo" width={72} height={72} />
         <h1>TeachAssist</h1>
         <p>Sign in with your YRDSB student number.</p>
       </div>
       <form onSubmit={submit} className="login-form">
-        <div className="group">
-          <label className="cell field-cell">
+        <div className="card">
+          <label className="row field-row">
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -43,11 +43,11 @@ export function LoginScreen() {
               aria-label="Student number"
             />
           </label>
-          <label className="cell field-cell">
+          <label className="row field-row">
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" autoComplete="current-password" aria-label="Password" />
           </label>
           {showAdvanced && (
-            <label className="cell field-cell">
+            <label className="row field-row">
               <input type="password" value={relayKey} onChange={(e) => setRelayKey(e.target.value)} placeholder="Relay key (optional)" autoComplete="off" aria-label="Relay access key" />
             </label>
           )}

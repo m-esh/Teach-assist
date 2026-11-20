@@ -1,7 +1,7 @@
-import { headlineAverage, isActive, officialMark } from '../lib/calc';
+import { fmt, headlineAverage, isActive, officialMark } from '../lib/calc';
 import type { Course } from '../lib/types';
 import { useStore } from '../store';
-import { Icon, Mark, NavBar, NavButton, Section, SubjectBadge, timeAgo } from '../components/ui';
+import { GlassButton, Icon, Mark, NavBar, Ring, Section, SubjectIcon, timeAgo } from '../components/ui';
 
 const FALLBACK_NAMES: Record<string, string> = {
   TDJ4M: 'Technological Design',
@@ -28,8 +28,8 @@ function groupCourses(courses: Course[], now = new Date()): Group[] {
   for (const c of courses) {
     const key = `${c.start}~${c.end}`;
     if (!map.has(key)) {
-      const status = isActive(c, now) ? 'Current' : c.start > today ? 'Upcoming' : c.end ? 'Past' : 'Other';
-      const order = { Current: 0, Upcoming: 1, Past: 2, Other: 3 }[status];
+      const status = isActive(c, now) ? 'This Semester' : c.start > today ? 'Next Semester' : c.end ? 'Past' : 'Other';
+      const order = { 'This Semester': 0, 'Next Semester': 1, Past: 2, Other: 3 }[status];
       map.set(key, { key, title: status, range: c.start ? `${fmtDate(c.start)} – ${fmtDate(c.end)}` : '', courses: [], order });
     }
     map.get(key)!.courses.push(c);
@@ -48,50 +48,42 @@ export function CoursesScreen({ onOpen }: { onOpen(id: string): void }) {
   for (const c of all) schoolCounts.set(c.school, (schoolCounts.get(c.school) ?? 0) + 1);
   const mainSchool = [...schoolCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
 
+
   return (
     <div className="screen">
       <NavBar
         title="Courses"
-        subtitle={syncing ? 'Updating…' : `Updated ${timeAgo(snap?.fetchedAt)}`}
+        subtitle={syncing ? 'Checking TeachAssist…' : `Updated ${timeAgo(snap?.fetchedAt)}`}
         right={
-          <NavButton onClick={() => void sync()} disabled={syncing} label="Refresh">
+          <GlassButton onClick={() => void sync()} disabled={syncing} label="Refresh">
             <span className={syncing ? 'spin' : ''}>
-              <Icon name="refresh" size={22} />
+              <Icon name="refresh" size={20} />
             </span>
-          </NavButton>
+          </GlassButton>
         }
       />
 
       {syncError && (
         <div className="notice">
-          <Icon name="clock" size={16} />
+          <Icon name="clock" size={18} />
           <span>{syncError}</span>
         </div>
       )}
 
-      <div className="summary">
-        <div className="summary-label">{avg.scope === 'current' ? 'Current Average' : 'Average'}</div>
-        <Mark value={avg.value} className="summary-mark" />
-        <div className="summary-bar" aria-hidden>
-          <div style={{ width: `${Math.max(0, Math.min(100, avg.value ?? 0))}%` }} />
+      <section className="hero-card">
+        <Ring value={avg.value} size={176} stroke={14}>
+          <Mark value={avg.value} animate className="ring-mark" />
+          <span className="ring-caption">{avg.scope === 'current' ? 'Average' : 'Overall'}</span>
+        </Ring>
+        <div className="hero-note">
+          {avg.count} course{avg.count === 1 ? '' : 's'} with a mark{avg.scope === 'current' ? ' this semester' : ''}
         </div>
-        <div className="summary-foot">
-          {avg.count} course{avg.count === 1 ? '' : 's'} with a mark
-        </div>
-      </div>
+      </section>
 
       {groups.map((g) => (
-        <Section
-          key={g.key}
-          header={
-            <>
-              <span>{g.title}</span>
-              {g.range && <span className="header-aside">{g.range}</span>}
-            </>
-          }
-        >
-          {g.courses.map((c) => (
-            <CourseCell key={c.id} course={c} onOpen={onOpen} mainSchool={mainSchool} />
+        <Section key={g.key} header={g.title} action={g.range ? <span className="header-aside">{g.range}</span> : undefined}>
+          {g.courses.map((c, i) => (
+            <CourseRow key={c.id} course={c} onOpen={onOpen} mainSchool={mainSchool} index={i} />
           ))}
         </Section>
       ))}
@@ -101,28 +93,43 @@ export function CoursesScreen({ onOpen }: { onOpen(id: string): void }) {
   );
 }
 
-function CourseCell({ course: c, onOpen, mainSchool }: { course: Course; onOpen(id: string): void; mainSchool: string }) {
+function CourseRow({ course: c, onOpen, mainSchool, index }: { course: Course; onOpen(id: string): void; mainSchool: string; index: number }) {
   const mark = officialMark(c);
   const canOpen = !!c.report || mark !== null || !!c.reportError;
-  const details = [c.code, c.block && `Block ${c.block}`, c.room && `Rm ${c.room}`].filter(Boolean).join(' · ');
+  const details = [c.block && `Block ${c.block}`, c.room && `Room ${c.room}`].filter(Boolean).join(' · ');
   return (
-    <button className="cell course-cell" onClick={() => canOpen && onOpen(c.id)} disabled={!canOpen}>
-      <SubjectBadge code={c.code} />
-      <span className="cell-main">
-        <span className="cell-title">{displayName(c)}</span>
-        <span className="cell-sub">{details}</span>
-        {c.school && c.school !== mainSchool && <span className="cell-sub">{c.school}</span>}
-      </span>
-      <span className="cell-end">
-        {mark !== null ? <Mark value={mark} className="cell-mark" /> : <span className="cell-none">No mark</span>}
-        {c.midterm !== null && <span className="cell-midterm">Midterm {Math.round(c.midterm)}%</span>}
-      </span>
-      {canOpen ? (
-        <span className="chev">
-          <Icon name="chevron" size={16} />
+    <button className="row course-row" onClick={() => canOpen && onOpen(c.id)} disabled={!canOpen} style={{ ['--i' as string]: index }}>
+      <SubjectIcon code={c.code} />
+      <span className="row-main">
+        <span className="row-title">{displayName(c)}</span>
+        <span className="row-sub">
+          {c.code}
+          {details && ` · ${details}`}
         </span>
-      ) : (
-        <span className="chev-space" />
+        {c.school && c.school !== mainSchool && <span className="row-sub faint">{c.school}</span>}
+      </span>
+      <span className="row-end">
+        {mark !== null ? (
+          <>
+            <Mark value={mark} className="row-mark" />
+            <span className="mini-bar">
+              <span style={{ width: `${Math.max(0, Math.min(100, mark))}%` }} />
+            </span>
+          </>
+        ) : c.midterm !== null ? (
+          <>
+            <Mark value={c.midterm} digits={0} className="row-mark soft" />
+            <span className="row-tag">Midterm</span>
+          </>
+        ) : (
+          <span className="row-none">No mark</span>
+        )}
+        {mark !== null && c.midterm !== null && <span className="row-tag">Midterm {fmt(c.midterm, 0)}%</span>}
+      </span>
+      {canOpen && (
+        <span className="chev">
+          <Icon name="chevron" size={15} />
+        </span>
       )}
     </button>
   );

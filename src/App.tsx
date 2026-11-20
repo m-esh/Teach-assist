@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { StoreProvider, useStore } from './store';
 import { CoursesScreen } from './screens/Courses';
 import { CourseDetail } from './screens/CourseDetail';
@@ -6,29 +7,64 @@ import { UpdatesScreen } from './screens/Updates';
 import { SettingsScreen } from './screens/Settings';
 import { LoginScreen } from './screens/Login';
 import { LockScreen } from './screens/Lock';
-import { Icon } from './components/ui';
+import { TabBar } from './components/TabBar';
 
 type Tab = 'courses' | 'updates' | 'settings';
+const ORDER: Tab[] = ['courses', 'updates', 'settings'];
+
+/** Runs a navigation inside a View Transition (slides in the direction of travel). */
+function transition(dir: 'forward' | 'back' | 'none', fn: () => void) {
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (!doc.startViewTransition || reduced || dir === 'none') {
+    fn();
+    return;
+  }
+  document.documentElement.dataset.nav = dir;
+  doc.startViewTransition(() => flushSync(fn));
+}
 
 function Shell() {
   const store = useStore();
   const [tab, setTab] = useState<Tab>('courses');
   const [courseId, setCourseId] = useState<string | null>(null);
 
-  // Hardware/browser back closes the course page.
+  // Browser/back gesture closes the course page.
   useEffect(() => {
-    const onPop = () => setCourseId(null);
+    const onPop = () => transition('back', () => setCourseId(null));
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
   const open = (id: string) => {
     history.pushState({ course: id }, '');
-    setCourseId(id);
-    window.scrollTo(0, 0);
+    transition('forward', () => {
+      setCourseId(id);
+      window.scrollTo(0, 0);
+    });
   };
   const back = () => {
     if (history.state?.course) history.back();
-    else setCourseId(null);
+    else transition('back', () => setCourseId(null));
+  };
+  const selectTab = (t: Tab) => {
+    if (courseId) {
+      if (history.state?.course) history.replaceState(null, '');
+      transition('back', () => {
+        setCourseId(null);
+        setTab(t);
+        window.scrollTo(0, 0);
+      });
+      return;
+    }
+    if (t === tab) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    transition(ORDER.indexOf(t) > ORDER.indexOf(tab) ? 'forward' : 'back', () => {
+      setTab(t);
+      window.scrollTo(0, 0);
+    });
   };
 
   if (store.phase === 'loading') return null;
@@ -51,32 +87,15 @@ function Shell() {
           <SettingsScreen />
         )}
       </main>
-      <nav className="tabbar" aria-label="Sections">
-        {(
-          [
-            ['courses', 'Courses', 'book'],
-            ['updates', 'Updates', 'bell'],
-            ['settings', 'Settings', 'gear'],
-          ] as const
-        ).map(([id, label, icon]) => (
-          <button
-            key={id}
-            className={tab === id && !course ? 'active' : ''}
-            onClick={() => {
-              if (course) back();
-              setTab(id);
-              window.scrollTo(0, 0);
-            }}
-            aria-current={tab === id && !course ? 'page' : undefined}
-          >
-            <span className="tab-icon">
-              <Icon name={icon} size={24} />
-              {id === 'updates' && unseen > 0 && <span className="badge">{unseen > 99 ? '99+' : unseen}</span>}
-            </span>
-            {label}
-          </button>
-        ))}
-      </nav>
+      <TabBar
+        active={tab}
+        onSelect={selectTab}
+        tabs={[
+          { id: 'courses', label: 'Courses', icon: 'book' },
+          { id: 'updates', label: 'Updates', icon: 'bell', badge: unseen },
+          { id: 'settings', label: 'Settings', icon: 'gear' },
+        ]}
+      />
     </>
   );
 }

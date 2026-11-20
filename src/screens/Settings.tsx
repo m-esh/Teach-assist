@@ -25,8 +25,8 @@ export function SettingsScreen() {
     <div className="screen">
       <NavBar title="Settings" />
 
-      <Section header="Theme">
-        <div className="cell swatch-cell">
+      <Section header="Appearance">
+        <div className="row swatch-row">
           <div className="swatches" role="radiogroup" aria-label="Theme colour">
             {(Object.keys(THEMES) as ThemeName[]).map((t) => (
               <button
@@ -44,42 +44,42 @@ export function SettingsScreen() {
             ))}
           </div>
         </div>
-        <div className="cell">
+        <div className="row">
           <Segmented<Appearance>
             label="Appearance"
             value={look.appearance}
             onChange={(appearance) => updateLook({ appearance })}
             options={[
-              ['system', 'Automatic'],
-              ['light', 'Light'],
-              ['dark', 'Dark'],
+              ['system', 'Auto', 'auto'],
+              ['light', 'Light', 'sun'],
+              ['dark', 'Dark', 'moon'],
             ]}
           />
         </div>
       </Section>
 
       <Section header="Account">
-        <div className="cell">
-          <IconTile name="person" color="var(--c-blue)" />
-          <span className="cell-main">
-            <span className="cell-title">Student Number</span>
+        <div className="row">
+          <IconTile name="person" color="linear-gradient(150deg,#5ac8fa,#007aff)" />
+          <span className="row-main">
+            <span className="row-title">Student Number</span>
           </span>
-          <span className="cell-value">{masked}</span>
+          <span className="row-value">{masked}</span>
         </div>
-        <button className="cell" onClick={() => void s.sync()} disabled={s.syncing}>
-          <IconTile name="refresh" color="var(--c-green)" />
-          <span className="cell-main">
-            <span className="cell-title">{s.syncing ? 'Syncing…' : 'Sync Now'}</span>
+        <button className="row" onClick={() => void s.sync()} disabled={s.syncing}>
+          <IconTile name="refresh" color="linear-gradient(150deg,#5be37d,#28b04b)" />
+          <span className="row-main">
+            <span className="row-title">{s.syncing ? 'Syncing…' : 'Sync Now'}</span>
           </span>
-          <span className="cell-value">{timeAgo(snapshot?.fetchedAt)}</span>
+          <span className="row-value">{timeAgo(snapshot?.fetchedAt)}</span>
         </button>
       </Section>
 
       <Section header="Privacy & Security" footer="A PIN encrypts everything this app stores on your phone. Ten wrong attempts erase it.">
-        <div className="cell">
-          <IconTile name="lock" color="var(--c-gray)" />
-          <span className="cell-main">
-            <span className="cell-title">Require PIN</span>
+        <div className="row">
+          <IconTile name="lock" color="linear-gradient(150deg,#b4b4be,#7c7c86)" />
+          <span className="row-main">
+            <span className="row-title">Require PIN</span>
           </span>
           <Toggle
             label="Require PIN"
@@ -92,10 +92,10 @@ export function SettingsScreen() {
           />
         </div>
         {s.hasPin && (
-          <button className="cell" onClick={() => setPinFlow('set')}>
-            <IconTile name="key" color="var(--c-gray)" />
-            <span className="cell-main">
-              <span className="cell-title">Change PIN</span>
+          <button className="row" onClick={() => setPinFlow('set')}>
+            <IconTile name="key" color="linear-gradient(150deg,#b4b4be,#7c7c86)" />
+            <span className="row-main">
+              <span className="row-title">Change PIN</span>
             </span>
             <span className="chev">
               <Icon name="chevron" size={16} />
@@ -105,25 +105,25 @@ export function SettingsScreen() {
       </Section>
 
       <Section header="General">
-        <div className="cell">
-          <IconTile name="clock" color="var(--c-orange)" />
-          <span className="cell-main">
-            <span className="cell-title">Refresh on Open</span>
+        <div className="row">
+          <IconTile name="clock" color="linear-gradient(150deg,#ffc04d,#ff8a00)" />
+          <span className="row-main">
+            <span className="row-title">Refresh on Open</span>
           </span>
           <Toggle label="Refresh on open" checked={settings.autoRefresh} onChange={(v) => s.updateSettings({ autoRefresh: v })} />
         </div>
-        <div className="cell">
-          <IconTile name="eye" color="var(--c-teal)" />
-          <span className="cell-main">
-            <span className="cell-title">Hide Courses Without Marks</span>
+        <div className="row">
+          <IconTile name="eye" color="linear-gradient(150deg,#6ee0f0,#1fa9c6)" />
+          <span className="row-main">
+            <span className="row-title">Hide Courses Without Marks</span>
           </span>
           <Toggle label="Hide courses without marks" checked={settings.hideEmptyCourses} onChange={(v) => s.updateSettings({ hideEmptyCourses: v })} />
         </div>
       </Section>
 
       <Section header="Advanced" footer="Only needed if an access key was set for your relay. Leave blank otherwise.">
-        <label className="cell field-cell">
-          <span className="cell-title">Relay Key</span>
+        <label className="row field-row">
+          <span className="row-title">Relay Key</span>
           <input
             type="password"
             autoComplete="off"
@@ -138,8 +138,8 @@ export function SettingsScreen() {
       </Section>
 
       <Section>
-        <button className="cell" onClick={() => setConfirmErase(true)}>
-          <span className="cell-title danger center-text">Sign Out</span>
+        <button className="row" onClick={() => setConfirmErase(true)}>
+          <span className="row-title danger center-text">Sign Out</span>
         </button>
       </Section>
 
@@ -149,7 +149,8 @@ export function SettingsScreen() {
         Not affiliated with YRDSB or the teachassist foundation.
       </p>
 
-      <Sheet open={pinFlow !== null} title={pinFlow === 'confirm' ? 'Confirm PIN' : 'New PIN'} onClose={() => setPinFlow(null)}>
+      {pinFlow !== null && (
+      <Sheet title={pinFlow === 'confirm' ? 'Confirm PIN' : 'New PIN'} onClose={() => setPinFlow(null)}>
         <div className="pin-sheet">
           <p className="pin-prompt">{pinFlow === 'confirm' ? 'Enter it again to confirm' : 'Choose a 6-digit PIN'}</p>
           <PinPad
@@ -171,6 +172,7 @@ export function SettingsScreen() {
           />
         </div>
       </Sheet>
+      )}
 
       {confirmErase && (
         <div className="alert-backdrop" onClick={() => setConfirmErase(false)}>

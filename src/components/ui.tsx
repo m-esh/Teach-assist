@@ -1,81 +1,139 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { fmt } from '../lib/calc';
 
+const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/** Animates a number from its previous value (or 0) to the new one. */
+export function useCountUp(target: number | null | undefined, ms = 900): number | null {
+  const [v, setV] = useState<number | null>(target ?? null);
+  const from = useRef<number>(0);
+  useEffect(() => {
+    if (target === null || target === undefined || !Number.isFinite(target)) {
+      setV(null);
+      return;
+    }
+    if (reducedMotion()) {
+      setV(target);
+      from.current = target;
+      return;
+    }
+    const start = performance.now();
+    const a = from.current;
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / ms);
+      const e = 1 - Math.pow(1 - t, 3);
+      setV(a + (target - a) * e);
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else from.current = target;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return v;
+}
+
 /* ------------------------------------------------------------------ */
-/* Navigation bar: large title that collapses into a blurred bar        */
+/* Top bar: floating glass buttons, title that appears on scroll       */
 /* ------------------------------------------------------------------ */
 
 export function NavBar({
   title,
   subtitle,
-  large = true,
   left,
   right,
+  eyebrow,
 }: {
   title: string;
   subtitle?: ReactNode;
-  large?: boolean;
   left?: ReactNode;
   right?: ReactNode;
+  eyebrow?: ReactNode;
 }) {
   const [scrolled, setScrolled] = useState(false);
+  const [titled, setTitled] = useState(false);
   useEffect(() => {
-    const on = () => setScrolled(window.scrollY > (large ? 40 : 4));
+    const on = () => {
+      setScrolled(window.scrollY > 12);
+      setTitled(window.scrollY > 56);
+    };
     on();
     window.addEventListener('scroll', on, { passive: true });
     return () => window.removeEventListener('scroll', on);
-  }, [large]);
+  }, []);
   return (
     <>
-      <div className={`navbar ${scrolled ? 'scrolled' : ''}`}>
-        <div className="nav-side">{left}</div>
-        <div className={`nav-title ${large && !scrolled ? 'hide' : ''}`}>{title}</div>
-        <div className="nav-side right">{right}</div>
+      <div className={`scroll-edge ${scrolled ? 'on' : ''}`} aria-hidden />
+      <div className={`topbar ${scrolled ? 'scrolled' : ''} ${titled ? 'titled' : ''}`}>
+        <div className="top-side">{left}</div>
+        <div className="top-title">{title}</div>
+        <div className="top-side right">{right}</div>
       </div>
-      {large && (
-        <div className="large-title">
-          <h1>{title}</h1>
-          {subtitle && <div className="large-sub">{subtitle}</div>}
-        </div>
-      )}
+      <header className="page-head">
+        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
+        <h1>{title}</h1>
+        {subtitle && <div className="page-sub">{subtitle}</div>}
+      </header>
     </>
   );
 }
 
-export function NavButton({ children, onClick, bold, disabled, label }: { children: ReactNode; onClick(): void; bold?: boolean; disabled?: boolean; label?: string }) {
+export function GlassButton({
+  children,
+  onClick,
+  label,
+  disabled,
+  prominent,
+  wide,
+}: {
+  children: ReactNode;
+  onClick(): void;
+  label: string;
+  disabled?: boolean;
+  prominent?: boolean;
+  wide?: boolean;
+}) {
   return (
-    <button className={`nav-btn ${bold ? 'bold' : ''}`} onClick={onClick} disabled={disabled} aria-label={label}>
+    <button className={`glass-btn ${prominent ? 'prominent' : ''} ${wide ? 'wide' : ''}`} onClick={onClick} disabled={disabled} aria-label={label}>
       {children}
     </button>
   );
 }
 
-export function BackButton({ onClick, label }: { onClick(): void; label: string }) {
-  return (
-    <button className="nav-btn back" onClick={onClick} aria-label="Back">
-      <Icon name="back" size={24} />
-      <span>{label}</span>
-    </button>
-  );
-}
-
 /* ------------------------------------------------------------------ */
-/* Inset grouped lists                                                 */
+/* Cards and rows                                                      */
 /* ------------------------------------------------------------------ */
 
-export function Section({ header, footer, children, className }: { header?: ReactNode; footer?: ReactNode; children: ReactNode; className?: string }) {
+export function Section({
+  header,
+  footer,
+  children,
+  className,
+  action,
+}: {
+  header?: ReactNode;
+  footer?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  action?: ReactNode;
+}) {
   return (
     <section className={`section ${className ?? ''}`}>
-      {header && <div className="section-header">{header}</div>}
-      <div className="group">{children}</div>
+      {(header || action) && (
+        <div className="section-header">
+          <span>{header}</span>
+          {action}
+        </div>
+      )}
+      <div className="card">{children}</div>
       {footer && <div className="section-footer">{footer}</div>}
     </section>
   );
 }
 
-export function IconTile({ name, color }: { name: string; color?: string }) {
+export function IconTile({ name, color }: { name: string; color: string }) {
   return (
-    <span className="icon-tile" style={color ? { background: color } : undefined}>
+    <span className="icon-tile" style={{ ['--tile' as string]: color }}>
       <Icon name={name} size={17} />
     </span>
   );
@@ -93,13 +151,14 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
   );
 }
 
-export function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: Array<[T, string]>; onChange(v: T): void; label: string }) {
+export function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: Array<[T, string, string?]>; onChange(v: T): void; label: string }) {
   const idx = Math.max(0, options.findIndex(([v]) => v === value));
   return (
     <div className="segmented" role="radiogroup" aria-label={label} style={{ ['--n' as string]: options.length, ['--i' as string]: idx }}>
       <span className="seg-thumb" />
-      {options.map(([v, l]) => (
+      {options.map(([v, l, icon]) => (
         <button key={v} role="radio" aria-checked={v === value} className={v === value ? 'on' : ''} onClick={() => onChange(v)}>
+          {icon && <Icon name={icon} size={16} />}
           {l}
         </button>
       ))}
@@ -113,7 +172,6 @@ export function Stepper({ value, onChange, min = 0, max = 100, step = 1, label }
       <button aria-label={`Decrease ${label}`} onClick={() => onChange(Math.max(min, value - step))} disabled={value <= min}>
         <Icon name="minus" size={18} />
       </button>
-      <span className="stepper-sep" />
       <button aria-label={`Increase ${label}`} onClick={() => onChange(Math.min(max, value + step))} disabled={value >= max}>
         <Icon name="plus" size={18} />
       </button>
@@ -149,56 +207,51 @@ export function NumberInput({
 }
 
 /* ------------------------------------------------------------------ */
-/* Sheets                                                              */
+/* Sheets (floating glass, iOS 26 style)                               */
 /* ------------------------------------------------------------------ */
 
 export function Sheet({
-  open,
   onClose,
   title,
   children,
   action,
 }: {
-  open: boolean;
   onClose(): void;
   title: string;
   children: ReactNode;
   action?: { label: string; onClick(): void; disabled?: boolean };
 }) {
   const [closing, setClosing] = useState(false);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const close = () => {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(() => closeRef.current(), reducedMotion() ? 0 : 220);
+  };
   useEffect(() => {
-    if (!open) return;
-    setClosing(false);
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current();
     window.addEventListener('keydown', onKey);
     document.body.classList.add('no-scroll');
     return () => {
       window.removeEventListener('keydown', onKey);
       document.body.classList.remove('no-scroll');
     };
-  }, [open, onClose]);
-  if (!open) return null;
-  const close = () => {
-    setClosing(true);
-    setTimeout(onClose, 180);
-  };
+  }, []);
   return (
     <div className={`sheet-backdrop ${closing ? 'closing' : ''}`} onClick={close}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grabber" />
         <div className="sheet-head">
-          <button className="nav-btn" onClick={close}>
-            {action ? 'Cancel' : ''}
-          </button>
+          <GlassButton onClick={close} label="Close">
+            <Icon name="close" size={18} />
+          </GlassButton>
           <h2>{title}</h2>
           {action ? (
-            <button className="nav-btn bold" onClick={action.onClick} disabled={action.disabled}>
-              {action.label}
-            </button>
+            <GlassButton onClick={action.onClick} label={action.label} disabled={action.disabled} prominent>
+              <Icon name="check" size={20} />
+            </GlassButton>
           ) : (
-            <button className="nav-btn bold" onClick={close}>
-              Done
-            </button>
+            <span className="glass-btn-space" />
           )}
         </div>
         <div className="sheet-body">{children}</div>
@@ -208,17 +261,49 @@ export function Sheet({
 }
 
 /* ------------------------------------------------------------------ */
-/* Marks                                                               */
+/* Marks & visuals                                                     */
 /* ------------------------------------------------------------------ */
 
-export function MarkRing({ mark, size = 160, stroke = 14, children }: { mark: number | null; size?: number; stroke?: number; children?: ReactNode }) {
+export function Ring({ value, size = 180, stroke = 16, children }: { value: number | null; size?: number; stroke?: number; children?: ReactNode }) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
-  const pct = mark === null ? 0 : Math.max(0, Math.min(100, mark));
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(value === null ? 0 : Math.max(0, Math.min(100, value))));
+    return () => cancelAnimationFrame(id);
+  }, [value]);
   return (
     <div className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--fill)" strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--track)" strokeWidth={stroke} fill="none" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke="var(--accent)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - shown / 100)}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          className="ring-arc"
+        />
+      </svg>
+      <div className="ring-inner">{children}</div>
+    </div>
+  );
+}
+
+export function MiniRing({ value, size = 34 }: { value: number | null; size?: number }) {
+  const stroke = 4;
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = value === null ? 0 : Math.max(0, Math.min(100, value));
+  return (
+    <svg className="mini-ring" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+      <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--track)" strokeWidth={stroke} fill="none" />
+      {value !== null && (
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -230,19 +315,19 @@ export function MarkRing({ mark, size = 160, stroke = 14, children }: { mark: nu
           strokeDasharray={circ}
           strokeDashoffset={circ * (1 - pct / 100)}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          className="ring-arc"
         />
-      </svg>
-      <div className="ring-inner">{children}</div>
-    </div>
+      )}
+    </svg>
   );
 }
 
-export function Mark({ value, digits = 1, className }: { value: number | null | undefined; digits?: number; className?: string }) {
-  if (value === null || value === undefined || !Number.isFinite(value)) return <span className={`mark none ${className ?? ''}`}>—</span>;
+export function Mark({ value, digits = 1, className, animate }: { value: number | null | undefined; digits?: number; className?: string; animate?: boolean }) {
+  const counted = useCountUp(animate ? value : null);
+  const v = animate ? counted : value;
+  if (v === null || v === undefined || !Number.isFinite(v)) return <span className={`mark none ${className ?? ''}`}>—</span>;
   return (
     <span className={`mark ${className ?? ''}`}>
-      {fmt(value, digits)}
+      {fmt(v, digits)}
       <span className="pct">%</span>
     </span>
   );
@@ -260,11 +345,45 @@ export function Delta({ from, to }: { from: number | null | undefined; to: numbe
   );
 }
 
-export function SubjectBadge({ code }: { code: string }) {
+/** Bars of evaluation results in order, with the average as a dashed line. */
+export function TrendChart({ points }: { points: Array<{ label: string; value: number }> }) {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setOn(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  if (!points.length) return null;
+  const W = 320;
+  const H = 120;
+  const gap = points.length > 12 ? 4 : 8;
+  const bw = Math.min(34, (W - gap * (points.length - 1)) / points.length);
+  const total = bw * points.length + gap * (points.length - 1);
+  const x0 = (W - total) / 2;
+  const min = Math.max(0, Math.floor((Math.min(...points.map((p) => p.value)) - 15) / 10) * 10);
+  const y = (v: number) => H - ((Math.max(min, Math.min(100, v)) - min) / (100 - min)) * (H - 8);
+  const avg = points.reduce((s, p) => s + p.value, 0) / points.length;
   return (
-    <span className="subject" aria-hidden>
-      {code.slice(0, 3)}
-    </span>
+    <svg className={`trend ${on ? 'on' : ''}`} viewBox={`0 0 ${W} ${H + 4}`} role="img" aria-label={`Evaluation results, average ${fmt(avg)}%`}>
+      {points.map((p, i) => {
+        const top = y(p.value);
+        return (
+          <rect
+            key={i}
+            x={x0 + i * (bw + gap)}
+            y={top}
+            width={bw}
+            height={H - top}
+            rx={Math.min(6, bw / 2)}
+            fill="var(--accent)"
+            opacity={i === points.length - 1 ? 1 : 0.55}
+            style={{ transitionDelay: `${i * 40}ms` }}
+          >
+            <title>{`${p.label}: ${fmt(p.value)}%`}</title>
+          </rect>
+        );
+      })}
+      <line x1="0" x2={W} y1={y(avg)} y2={y(avg)} className="trend-avg" />
+    </svg>
   );
 }
 
@@ -286,13 +405,14 @@ const PATHS: Record<string, ReactNode> = {
   refresh: <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4.8h-4.8" />,
   plus: <path d="M12 5v14M5 12h14" />,
   minus: <path d="M5 12h14" />,
-  close: <path d="M6 6l12 12M18 6L6 18" />,
+  close: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
   trash: <path d="M5 7h14M10 7V4.5h4V7M7 7l.8 12.5h8.4L17 7M10.5 10.5v6M13.5 10.5v6" />,
   undo: <path d="M9 14L4.5 9.5 9 5M4.5 9.5H15a5 5 0 0 1 0 10h-3" />,
   edit: <path d="M4.5 19.5l1-4L16 5a2 2 0 0 1 3 3L8.5 18.5l-4 1z" />,
+  wand: <path d="M4 20L15 9M14 4v3M12.5 5.5h3M19 9v3M17.5 10.5h3M18 3.5l1 1M6 6l1 1" />,
   lock: (
     <>
-      <rect x="5" y="10.5" width="14" height="10" rx="2.5" />
+      <rect x="5" y="10.5" width="14" height="10" rx="3" />
       <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
     </>
   ),
@@ -312,7 +432,6 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M5 20c1-3.5 4-5 7-5s6 1.5 7 5" />
     </>
   ),
-  paint: <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2-1 1.4-2.2-.6-1.3.3-2.8 1.8-2.8h1.8a3.5 3.5 0 0 0 3.5-3.5C20.5 7 16.7 3.5 12 3.5zM7.5 12a1 1 0 1 0 0-.01M10 7.5a1 1 0 1 0 0-.01M15 7.5a1 1 0 1 0 0-.01" />,
   eye: (
     <>
       <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
@@ -335,6 +454,55 @@ const PATHS: Record<string, ReactNode> = {
   arrowUp: <path d="M12 19V5M6 11l6-6 6 6" />,
   arrowDown: <path d="M12 5v14M6 13l6 6 6-6" />,
   shield: <path d="M12 3l7.5 3v5.5c0 4.5-3.2 8-7.5 9.5-4.3-1.5-7.5-5-7.5-9.5V6z" />,
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
+    </>
+  ),
+  moon: <path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z" />,
+  auto: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5v17A8.5 8.5 0 0 0 12 3.5z" fill="currentColor" />
+    </>
+  ),
+  /* subjects */
+  fx: <path d="M10.5 4.5c-2 0-2.5 1.5-2.8 3.5L6 19.5M4.5 10h6M13 10l6 8M19 10l-6 8" />,
+  atom: (
+    <>
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+      <ellipse cx="12" cy="12" rx="9" ry="3.6" />
+      <ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(60 12 12)" />
+      <ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(120 12 12)" />
+    </>
+  ),
+  flask: <path d="M9.5 3.5h5M10.5 3.5v5.5L5 18.5a1.5 1.5 0 0 0 1.3 2h11.4a1.5 1.5 0 0 0 1.3-2L13.5 9V3.5M7.5 14.5h9" />,
+  leaf: <path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14zM5 19l7-7" />,
+  monitor: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="11.5" rx="2.5" />
+      <path d="M9 20h6M12 16v4M9.5 9l-2 1.5 2 1.5M14.5 9l2 1.5-2 1.5" />
+    </>
+  ),
+  music: <path d="M9 18V6l10-2v12M9 18a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM19 16a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z" />,
+  ruler: <path d="M4 15.5L15.5 4 20 8.5 8.5 20zM8 11.5l1.5 1.5M10.5 9l2 2M13 6.5l1.5 1.5M5.5 14l2 2" />,
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17M12 3.5c2.5 2.5 3.5 5.5 3.5 8.5s-1 6-3.5 8.5c-2.5-2.5-3.5-5.5-3.5-8.5s1-6 3.5-8.5z" />
+    </>
+  ),
+  speech: <path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5V16.5h0a2 2 0 0 1-2-2z" />,
+  run: <path d="M14 5a1.5 1.5 0 1 0 0-.01M10 20l2.5-5.5L15 17v3.5M8 11.5l3-3 3 2 2.5.5M12.5 14.5l-1.5-6" />,
+  brief: (
+    <>
+      <rect x="3.5" y="7.5" width="17" height="12" rx="2.5" />
+      <path d="M9 7.5V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5v2M3.5 12.5h17" />
+    </>
+  ),
+  palette: <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 2-1 1.4-2.2-.6-1.3.3-2.8 1.8-2.8h1.8a3.5 3.5 0 0 0 3.5-3.5C20.5 7 16.7 3.5 12 3.5zM7.5 12h0M10 7.5h0M15 7.5h0" />,
+  pencil: <path d="M5 19l1-4 9.5-9.5 3 3L9 18zM13.5 7.5l3 3" />,
 };
 
 export function Icon({ name, size = 22 }: { name: string; size?: number }) {
@@ -342,6 +510,35 @@ export function Icon({ name, size = 22 }: { name: string; size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       {PATHS[name]}
     </svg>
+  );
+}
+
+/* Subject icons: colourful, like app icons, independent of the theme. */
+const SUBJECTS: Array<[RegExp, string, string, string]> = [
+  [/^M/, 'fx', '#ff6b6b', '#ff3b5c'],
+  [/^SPH/, 'atom', '#5ac8fa', '#2f7bff'],
+  [/^SCH/, 'flask', '#34d399', '#0ea56b'],
+  [/^S(BI|NC)|^S/, 'leaf', '#7ad957', '#2fae4e'],
+  [/^IC|^TEJ|^ICS/, 'monitor', '#8b7bff', '#5b4bf0'],
+  [/^E/, 'book', '#ffb547', '#ff8a1f'],
+  [/^A(MI|MU|MR|MG|MV)/, 'music', '#ff7ac6', '#e0479e'],
+  [/^A/, 'palette', '#ff9fd1', '#d9549a'],
+  [/^T/, 'ruler', '#4fd1c5', '#1aa3a0'],
+  [/^F/, 'speech', '#60a5fa', '#2563eb'],
+  [/^[CH]/, 'globe', '#fbbf24', '#e0951a'],
+  [/^P/, 'run', '#2dd4bf', '#0f9f8f'],
+  [/^B/, 'brief', '#a78bfa', '#7c5ce0'],
+  [/^G/, 'brief', '#a3a3ad', '#6e6e78'],
+];
+
+export function SubjectIcon({ code, size = 46 }: { code: string; size?: number }) {
+  const c = code.toUpperCase();
+  const isHall = /^SHAL/.test(c);
+  const [, icon, a, b] = isHall ? [null, 'clock', '#a3a3ad', '#6e6e78'] : SUBJECTS.find(([re]) => re.test(c)) ?? [null, 'book', '#a3a3ad', '#6e6e78'];
+  return (
+    <span className="subject" style={{ width: size, height: size, background: `linear-gradient(150deg, ${a}, ${b})` }} aria-hidden>
+      <Icon name={icon as string} size={Math.round(size * 0.5)} />
+    </span>
   );
 }
 

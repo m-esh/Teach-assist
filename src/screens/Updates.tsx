@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Update } from '../lib/types';
 import { useStore } from '../store';
-import { Delta, Icon, Mark, NavBar, NavButton, Section } from '../components/ui';
+import { Delta, GlassButton, Icon, Mark, NavBar, Section } from '../components/ui';
 
 const ICONS: Record<Update['type'], string> = {
   'evaluation-added': 'doc',
@@ -40,11 +40,21 @@ export function UpdatesScreen({ onOpen }: { onOpen(id: string): void }) {
 
   return (
     <div className="screen">
-      <NavBar title="Updates" right={vault.updates.length ? <NavButton onClick={clearUpdates}>Clear</NavButton> : undefined} />
+      <NavBar
+        title="Updates"
+        subtitle={vault.updates.length ? `${vault.updates.length} change${vault.updates.length === 1 ? '' : 's'} from TeachAssist` : undefined}
+        right={
+          vault.updates.length ? (
+            <GlassButton onClick={clearUpdates} label="Clear all" wide>
+              Clear
+            </GlassButton>
+          ) : undefined
+        }
+      />
       {!vault.updates.length && (
         <div className="empty big-empty">
           <span className="empty-icon">
-            <Icon name="bell" size={30} />
+            <Icon name="bell" size={28} />
           </span>
           <div className="empty-title">No Updates Yet</div>
           <div className="empty-text">New marks and changes from TeachAssist will show up here.</div>
@@ -55,17 +65,17 @@ export function UpdatesScreen({ onOpen }: { onOpen(id: string): void }) {
           {ups.map((u) => {
             const canOpen = !!u.courseId && !!courseById(u.courseId);
             return (
-              <button key={u.id} className="cell update-cell" onClick={() => canOpen && onOpen(u.courseId!)} disabled={!canOpen}>
+              <button key={u.id} className="row update-row" onClick={() => canOpen && onOpen(u.courseId!)} disabled={!canOpen}>
                 <span className="update-icon">
                   <Icon name={ICONS[u.type]} size={17} />
                   {fresh.has(u.id) && <span className="dot" aria-label="new" />}
                 </span>
-                <span className="cell-main">
-                  <span className="cell-title">{u.subtitle}</span>
-                  <span className="cell-sub">{u.title}</span>
+                <span className="row-main">
+                  <span className="row-title">{u.subtitle}</span>
+                  <span className="row-sub">{u.title}</span>
                 </span>
-                <span className="cell-end">
-                  {u.to !== undefined && u.to !== null && <Mark value={u.to} className="cell-mark" />}
+                <span className="row-end">
+                  {u.to !== undefined && u.to !== null && <Mark value={u.to} className="row-mark" />}
                   {u.from !== undefined && u.from !== null && <Delta from={u.from} to={u.to} />}
                 </span>
               </button>

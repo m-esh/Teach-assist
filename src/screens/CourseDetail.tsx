@@ -12,7 +12,7 @@ import {
 } from '../lib/calc';
 import type { Assessment, CatMark, Course, CourseReport } from '../lib/types';
 import { emptyWhatIf, useStore, type WhatIf } from '../store';
-import { BackButton, Delta, Icon, Mark, MarkRing, NavBar, NavButton, NumberInput, Section, Sheet, Stepper } from '../components/ui';
+import { Delta, GlassButton, Icon, Mark, MiniRing, NavBar, NumberInput, Ring, Section, Sheet, Stepper, TrendChart } from '../components/ui';
 import { displayName } from './Courses';
 
 function applyWhatIf(report: CourseReport, w: WhatIf): Assessment[] {
@@ -59,59 +59,84 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
   const mismatch = !!report && official !== null && baseCalc !== null && Math.abs(baseCalc - official) >= 0.15;
   const weightSum = report ? report.categories.reduce((s, c) => s + (report.weights[c.key] ?? 0), 0) : 0;
   const weightNote = report && (mismatch || (withData.length >= 2 && report.weightSource === 'estimated') || report.weightSource === 'custom');
-  const subtitle = [course.code, course.block && `Block ${course.block}`, course.room && `Room ${course.room}`].filter(Boolean).join(' · ');
+  const subtitle = [course.block && `Block ${course.block}`, course.room && `Room ${course.room}`].filter(Boolean).join(' · ');
   const shown = changed ? shownProjected : official;
   const evalCount = report ? report.assessments.length + whatIf.added.length : 0;
+  const trend = report
+    ? assessments
+        .filter((a) => report.categories.some((c) => counted(a, c.key)))
+        .map((a) => ({ label: a.name, value: assessmentPercent(a, report.weights) ?? 0 }))
+    : [];
 
   return (
-    <div className="screen push">
+    <div className="screen">
       <NavBar
+        eyebrow={course.code}
         title={displayName(course)}
         subtitle={subtitle}
-        left={<BackButton onClick={onBack} label="Courses" />}
+        left={
+          <GlassButton onClick={onBack} label="Back">
+            <Icon name="back" size={20} />
+          </GlassButton>
+        }
         right={
           report ? (
-            <NavButton bold={editMode} onClick={() => setEditMode(!editMode)}>
-              {editMode ? 'Done' : 'What-if'}
-            </NavButton>
+            <GlassButton onClick={() => setEditMode(!editMode)} label={editMode ? 'Done' : 'What-if'} prominent={editMode} wide>
+              {editMode ? (
+                'Done'
+              ) : (
+                <>
+                  <Icon name="wand" size={17} /> What-if
+                </>
+              )}
+            </GlassButton>
           ) : undefined
         }
       />
 
-      <div className="hero">
-        <MarkRing mark={shown} size={176} stroke={15}>
-          <Mark value={shown} className="hero-mark" />
-          <div className="hero-caption">{changed ? 'Projected' : 'Course mark'}</div>
-        </MarkRing>
+      <section className="hero-card detail-hero">
+        <Ring value={shown} size={188} stroke={15}>
+          <Mark value={shown} animate className="ring-mark big" />
+          <span className="ring-caption">{changed ? 'Projected' : 'Course mark'}</span>
+        </Ring>
         <div className="hero-pills">
-          {changed && (
+          {changed ? (
             <>
               <span className="pill">
                 TeachAssist {fmt(official)}% <Delta from={official ?? baseCalc} to={shownProjected} />
               </span>
               <button className="pill pill-btn" onClick={() => setWhatIf(emptyWhatIf())}>
-                <Icon name="undo" size={14} /> Reset
+                <Icon name="undo" size={15} /> Reset
               </button>
             </>
+          ) : (
+            <>
+              {course.midterm !== null && <span className="pill">Midterm {fmt(course.midterm, 0)}%</span>}
+              {report && <span className="pill">{report.assessments.filter((a) => Object.keys(a.marks).length).length} marked</span>}
+            </>
           )}
-          {!changed && course.midterm !== null && <span className="pill">Midterm {fmt(course.midterm, 0)}%</span>}
         </div>
-        {course.school && <div className="hero-school">{course.school}</div>}
-      </div>
+      </section>
 
       {course.reportError && <div className="notice">{course.reportError}</div>}
       {!report && !course.reportError && <div className="empty">No detailed report on TeachAssist yet.</div>}
 
       {report && (
         <>
+          {trend.length >= 2 && (
+            <Section header="Results" footer="Each bar is an evaluation, oldest to newest. The dashed line is your average." className="trend-section">
+              <div className="trend-wrap">
+                <TrendChart points={trend} />
+              </div>
+            </Section>
+          )}
+
           <Section
-            header={
-              <>
-                <span>Breakdown</span>
-                <button className="header-link" onClick={() => setWeightsOpen(true)}>
-                  Weightings
-                </button>
-              </>
+            header="Breakdown"
+            action={
+              <button className="header-link" onClick={() => setWeightsOpen(true)}>
+                Weightings
+              </button>
             }
             footer={
               weightNote ? (
@@ -129,17 +154,17 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
               const avg = avgs[c.key];
               const share = weightSum > 0 ? ((report.weights[c.key] ?? 0) / weightSum) * 100 : 0;
               return (
-                <div className="cell cat-cell" key={c.key}>
+                <div className="row cat-row" key={c.key}>
                   <span className="letter">{c.short}</span>
-                  <span className="cell-main">
+                  <span className="row-main">
                     <span className="cat-line">
-                      <span className="cell-title">{c.label}</span>
+                      <span className="row-title">{c.label}</span>
                       <Mark value={avg} className="cat-mark" />
                     </span>
                     <span className="meter" aria-hidden>
                       <span style={{ width: `${Math.max(0, Math.min(100, avg ?? 0))}%` }} />
                     </span>
-                    <span className="cell-sub">{share > 0 ? `${fmt(share, share % 1 ? 1 : 0)}% of course` : 'Not counted'}</span>
+                    <span className="row-sub">{share > 0 ? `${fmt(share, share % 1 ? 1 : 0)}% of course` : 'Not counted'}</span>
                   </span>
                 </div>
               );
@@ -149,20 +174,16 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
           <NeededSection report={report} assessments={assessments} current={shown} offset={official !== null && baseCalc !== null ? official - baseCalc : 0} />
 
           <Section
-            header={
-              <>
-                <span>Evaluations</span>
-                <span className="header-aside">{evalCount}</span>
-              </>
-            }
+            header="Evaluations"
+            action={<span className="header-aside">{evalCount}</span>}
             footer={editMode ? 'Remove, edit or add evaluations to see how your mark changes. This resets when you close the app.' : undefined}
           >
             {editMode && (
-              <button className="cell add-cell" onClick={() => setEditing('new')}>
+              <button className="row add-row" onClick={() => setEditing('new')}>
                 <span className="round-btn add">
                   <Icon name="plus" size={14} />
                 </span>
-                <span className="cell-title accent">Add Evaluation</span>
+                <span className="row-title accent">Add an evaluation</span>
               </button>
             )}
             {[...whatIf.added].reverse().map((a) => (
@@ -200,7 +221,7 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
                 />
               );
             })}
-            {!evalCount && <div className="cell muted-cell">No evaluations posted yet.</div>}
+            {!evalCount && <div className="row muted-row">No evaluations posted yet.</div>}
           </Section>
         </>
       )}
@@ -260,7 +281,7 @@ function EvalCell({
   const restoring = removed || revertable;
 
   return (
-    <div className={`cell eval-cell ${removed ? 'removed' : ''} ${editMode ? 'editing' : ''}`}>
+    <div className={`row eval-row ${removed ? 'removed' : ''} ${editMode ? 'editing' : ''}`}>
       {editMode && (
         <button className={`round-btn ${restoring ? 'restore' : 'remove'}`} onClick={onToggle} aria-label={restoring ? `Restore ${a.name}` : `Remove ${a.name}`}>
           <Icon name={restoring ? 'undo' : 'minus'} size={14} />
@@ -272,8 +293,9 @@ function EvalCell({
         aria-expanded={editMode ? undefined : open}
       >
         <span className="eval-top">
-          <span className="cell-title eval-name">{a.name}</span>
-          {hasMarks && pct !== null ? <Mark value={pct} className="eval-mark" /> : <span className="cell-none">Not marked</span>}
+          <MiniRing value={hasMarks && anyCounted ? pct : null} />
+          <span className="row-title eval-name">{a.name}</span>
+          {hasMarks && pct !== null ? <Mark value={pct} className="eval-mark" /> : <span className="row-none">Not marked</span>}
         </span>
         {(tag || a.excluded === 'no-mark' || (hasMarks && !anyCounted && !a.excluded)) && (
           <span className="tags">
@@ -299,7 +321,7 @@ function EvalCell({
         )}
         {open && hasDetail && (
           <span className="feedback">
-            {a.expectation && <span className="cell-sub">Expectation {a.expectation}</span>}
+            {a.expectation && <span className="row-sub">Expectation {a.expectation}</span>}
             {a.feedback && <span>{a.feedback}</span>}
           </span>
         )}
@@ -359,13 +381,13 @@ function EvalEditor({ report, initial, onClose, onSave }: { report: CourseReport
     });
 
   return (
-    <Sheet open title={initial ? 'Edit Evaluation' : 'New Evaluation'} onClose={onClose} action={{ label: initial ? 'Save' : 'Add', onClick: save, disabled: !valid }}>
+    <Sheet title={initial ? 'Edit Evaluation' : 'New Evaluation'} onClose={onClose} action={{ label: initial ? 'Save' : 'Add', onClick: save, disabled: !valid }}>
       <Section>
-        <label className="cell field-cell">
+        <label className="row field-row">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. Unit 5 Test)" aria-label="Evaluation name" />
         </label>
-        <label className="cell field-cell">
-          <span className="cell-title">Score in every category</span>
+        <label className="row field-row">
+          <span className="row-title grow">Same score everywhere</span>
           <span className="inline-input">
             <NumberInput
               value={fill}
@@ -403,7 +425,7 @@ function EvalEditor({ report, initial, onClose, onSave }: { report: CourseReport
         footer="Leave a mark blank to skip that category. Weight is the evaluation's weight inside the category, as TeachAssist shows it."
       >
         {report.categories.map((c) => (
-          <div className="cell grid-cell" key={c.key}>
+          <div className="row grid-row" key={c.key}>
             <span className="letter" title={c.label}>
               {c.short}
             </span>
@@ -445,19 +467,20 @@ function NeededSection({ report, assessments, current, offset }: { report: Cours
     .join(', ');
 
   return (
-    <Section header="What Do I Need?" footer="The mark you'd need on your next evaluation, including any what-if changes.">
-      <div className="cell">
-        <span className="cell-main">
-          <span className="cell-title">Target</span>
+    <Section header="What do I need?" footer="Includes any what-if changes you've made.">
+      <div className="row">
+        <span className="row-main">
+          <span className="row-title">I want to finish with</span>
         </span>
         <span className="target-value">{target}%</span>
         <Stepper value={target} onChange={setTarget} min={50} max={100} label="target mark" />
       </div>
-      <div className="cell needed-cell">
+      <div className="row needed-row">
+        <Gauge value={res.kind === 'needed' ? res.percent ?? null : res.kind === 'guaranteed' ? 0 : res.kind === 'impossible' ? 100 : null} state={res.kind} />
         {res.kind === 'needed' && (
           <>
             <Mark value={res.percent} className="needed-mark" />
-            <span className="cell-sub">needed on the next evaluation</span>
+            <span className="row-sub">needed on your next evaluation</span>
           </>
         )}
         {res.kind === 'guaranteed' && (
@@ -465,32 +488,32 @@ function NeededSection({ report, assessments, current, offset }: { report: Cours
             <span className="needed-msg good">
               <Icon name="check" size={20} /> Already there
             </span>
-            <span className="cell-sub">Even 0% keeps you at {fmt(res.min)}% or above.</span>
+            <span className="row-sub">Even 0% keeps you at {fmt(res.min)}% or above.</span>
           </>
         )}
         {res.kind === 'impossible' && (
           <>
             <span className="needed-msg">Out of reach on one evaluation</span>
-            <span className="cell-sub">100% would bring you to {fmt(res.max)}%.</span>
+            <span className="row-sub">100% would bring you to {fmt(res.max)}%.</span>
           </>
         )}
-        {res.kind === 'invalid' && <span className="cell-sub">Give the next evaluation a weight in at least one category.</span>}
+        {res.kind === 'invalid' && <span className="row-sub">Give the next evaluation a weight in at least one category.</span>}
       </div>
-      <button className="cell" onClick={() => setShowWeights(!showWeights)} aria-expanded={showWeights}>
-        <span className="cell-main">
-          <span className="cell-title">Next evaluation</span>
+      <button className="row" onClick={() => setShowWeights(!showWeights)} aria-expanded={showWeights}>
+        <span className="row-main">
+          <span className="row-title">Next evaluation counts as</span>
         </span>
-        <span className="cell-value">{weightSummary || 'Set weight'}</span>
+        <span className="row-value">{weightSummary || 'Set weight'}</span>
         <span className={`chev ${showWeights ? 'down' : ''}`}>
           <Icon name="chevron" size={16} />
         </span>
       </button>
       {showWeights &&
         report.categories.map((c) => (
-          <label className="cell sub-cell" key={c.key}>
+          <label className="row sub-row" key={c.key}>
             <span className="letter">{c.short}</span>
-            <span className="cell-main">
-              <span className="cell-title">{c.label}</span>
+            <span className="row-main">
+              <span className="row-title">{c.label}</span>
             </span>
             <NumberInput value={weights[c.key]} onChange={(v) => setWeights((w) => ({ ...w, [c.key]: v }))} ariaLabel={`${c.label} weight`} placeholder="0" className="small-num" />
           </label>
@@ -506,17 +529,16 @@ function WeightsEditor({ onClose, report, original, onSave }: { onClose(): void;
   const total = Object.values(vals).reduce((s, v) => s + (parseFloat(v) || 0), 0);
   return (
     <Sheet
-      open
       title="Weightings"
       onClose={onClose}
       action={{ label: 'Save', disabled: total <= 0, onClick: () => onSave(Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, parseFloat(v) || 0]))) }}
     >
       <Section footer={`${weightSourceText[report.weightSource]} Total ${fmt(total, 1)}. Values are scaled automatically, so they don't need to add to 100.`}>
         {report.categories.map((c) => (
-          <label className="cell" key={c.key}>
+          <label className="row" key={c.key}>
             <span className="letter">{c.short}</span>
-            <span className="cell-main">
-              <span className="cell-title">{c.label}</span>
+            <span className="row-main">
+              <span className="row-title">{c.label}</span>
             </span>
             <NumberInput value={vals[c.key]} onChange={(v) => setVals((x) => ({ ...x, [c.key]: v }))} ariaLabel={`${c.label} weighting`} className="small-num" />
           </label>
@@ -524,11 +546,24 @@ function WeightsEditor({ onClose, report, original, onSave }: { onClose(): void;
       </Section>
       {report.weightSource === 'custom' && (
         <Section>
-          <button className="cell" onClick={() => onSave(null)}>
-            <span className="cell-title accent">Reset to {original.weightSource === 'teachassist' ? "TeachAssist's" : 'automatic'} weightings</span>
+          <button className="row" onClick={() => onSave(null)}>
+            <span className="row-title accent">Reset to {original.weightSource === 'teachassist' ? "TeachAssist's" : 'automatic'} weightings</span>
           </button>
         </Section>
       )}
     </Sheet>
+  );
+}
+
+/** Half-circle gauge for "what do I need". */
+function Gauge({ value, state }: { value: number | null; state: string }) {
+  const r = 34;
+  const len = Math.PI * r;
+  const pct = value === null ? 0 : Math.max(0, Math.min(100, value));
+  return (
+    <svg className={`gauge ${state}`} width="88" height="50" viewBox="0 0 88 50" aria-hidden>
+      <path d={`M10 44 A${r} ${r} 0 0 1 78 44`} className="gauge-track" />
+      <path d={`M10 44 A${r} ${r} 0 0 1 78 44`} className="gauge-fill" strokeDasharray={len} strokeDashoffset={len * (1 - pct / 100)} />
+    </svg>
   );
 }
