@@ -31,7 +31,7 @@ function Shell() {
     else setCourseId(null);
   };
 
-  if (store.phase === 'loading') return <div className="screen center-screen" />;
+  if (store.phase === 'loading') return null;
   if (store.phase === 'locked') return <LockScreen />;
   if (store.phase === 'login') return <LoginScreen />;
 
@@ -70,7 +70,7 @@ function Shell() {
             aria-current={tab === id && !course ? 'page' : undefined}
           >
             <span className="tab-icon">
-              <Icon name={icon} />
+              <Icon name={icon} size={24} />
               {id === 'updates' && unseen > 0 && <span className="badge">{unseen > 99 ? '99+' : unseen}</span>}
             </span>
             {label}

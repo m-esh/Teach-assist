@@ -1,7 +1,7 @@
-import { fmt, headlineAverage, isActive, officialMark } from '../lib/calc';
+import { headlineAverage, isActive, officialMark } from '../lib/calc';
 import type { Course } from '../lib/types';
 import { useStore } from '../store';
-import { Icon, MarkRing, SubjectBadge, markColor, timeAgo } from '../components/ui';
+import { Icon, Mark, NavBar, NavButton, Section, SubjectBadge, timeAgo } from '../components/ui';
 
 const FALLBACK_NAMES: Record<string, string> = {
   TDJ4M: 'Technological Design',
@@ -12,11 +12,12 @@ const FALLBACK_NAMES: Record<string, string> = {
 
 export const displayName = (c: Course) => c.name || FALLBACK_NAMES[c.code.slice(0, 5)] || c.code;
 
-const fmtDate = (iso: string) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+const fmtDate = (iso: string) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
 
 interface Group {
   key: string;
-  label: string;
+  title: string;
+  range: string;
   courses: Course[];
   order: number;
 }
@@ -27,14 +28,13 @@ function groupCourses(courses: Course[], now = new Date()): Group[] {
   for (const c of courses) {
     const key = `${c.start}~${c.end}`;
     if (!map.has(key)) {
-      const status = isActive(c, now) ? 'Now' : c.start > today ? 'Upcoming' : c.end ? 'Past' : '';
-      const range = c.start ? `${fmtDate(c.start)} – ${fmtDate(c.end)}` : 'No dates';
-      const order = status === 'Now' ? 0 : status === 'Upcoming' ? 1 : 2;
-      map.set(key, { key, label: status ? `${status} · ${range}` : range, courses: [], order });
+      const status = isActive(c, now) ? 'Current' : c.start > today ? 'Upcoming' : c.end ? 'Past' : 'Other';
+      const order = { Current: 0, Upcoming: 1, Past: 2, Other: 3 }[status];
+      map.set(key, { key, title: status, range: c.start ? `${fmtDate(c.start)} – ${fmtDate(c.end)}` : '', courses: [], order });
     }
     map.get(key)!.courses.push(c);
   }
-  return [...map.values()].sort((a, b) => a.order - b.order || a.key.localeCompare(b.key) * (a.order === 2 ? -1 : 1));
+  return [...map.values()].sort((a, b) => a.order - b.order || (a.order === 2 ? b.key.localeCompare(a.key) : a.key.localeCompare(b.key)));
 }
 
 export function CoursesScreen({ onOpen }: { onOpen(id: string): void }) {
@@ -50,78 +50,79 @@ export function CoursesScreen({ onOpen }: { onOpen(id: string): void }) {
 
   return (
     <div className="screen">
-      <header className="top">
-        <div>
-          <h1>Courses</h1>
-          <div className="sub">{syncing ? 'Updating…' : `Updated ${timeAgo(snap?.fetchedAt)}`}</div>
-        </div>
-        <button className={`icon-btn ${syncing ? 'spin' : ''}`} onClick={() => void sync()} aria-label="Refresh" disabled={syncing}>
-          <Icon name="refresh" />
-        </button>
-      </header>
+      <NavBar
+        title="Courses"
+        subtitle={syncing ? 'Updating…' : `Updated ${timeAgo(snap?.fetchedAt)}`}
+        right={
+          <NavButton onClick={() => void sync()} disabled={syncing} label="Refresh">
+            <span className={syncing ? 'spin' : ''}>
+              <Icon name="refresh" size={22} />
+            </span>
+          </NavButton>
+        }
+      />
 
-      {syncError && <div className="banner warn">{syncError}</div>}
-
-      <section className="card hero">
-        <MarkRing mark={avg.value} size={120} />
-        <div className="hero-text">
-          <div className="eyebrow">{avg.scope === 'current' ? 'Current average' : 'Overall average'}</div>
-          <div className="hero-big" style={{ color: markColor(avg.value) }}>
-            {fmt(avg.value)}
-            {avg.value !== null && '%'}
-          </div>
-          <div className="muted small">
-            {avg.count} course{avg.count === 1 ? '' : 's'} with a mark
-          </div>
+      {syncError && (
+        <div className="notice">
+          <Icon name="clock" size={16} />
+          <span>{syncError}</span>
         </div>
-      </section>
+      )}
+
+      <div className="summary">
+        <div className="summary-label">{avg.scope === 'current' ? 'Current Average' : 'Average'}</div>
+        <Mark value={avg.value} className="summary-mark" />
+        <div className="summary-bar" aria-hidden>
+          <div style={{ width: `${Math.max(0, Math.min(100, avg.value ?? 0))}%` }} />
+        </div>
+        <div className="summary-foot">
+          {avg.count} course{avg.count === 1 ? '' : 's'} with a mark
+        </div>
+      </div>
 
       {groups.map((g) => (
-        <section key={g.key}>
-          <h3 className="group-label">{g.label}</h3>
-          <div className="list">
-            {g.courses.map((c) => (
-              <CourseRow key={c.id} course={c} onOpen={onOpen} mainSchool={mainSchool} />
-            ))}
-          </div>
-        </section>
+        <Section
+          key={g.key}
+          header={
+            <>
+              <span>{g.title}</span>
+              {g.range && <span className="header-aside">{g.range}</span>}
+            </>
+          }
+        >
+          {g.courses.map((c) => (
+            <CourseCell key={c.id} course={c} onOpen={onOpen} mainSchool={mainSchool} />
+          ))}
+        </Section>
       ))}
 
-      {!all.length && !syncing && <div className="empty">No courses yet. Tap refresh to try again.</div>}
+      {!all.length && !syncing && <div className="empty">No courses yet.</div>}
     </div>
   );
 }
 
-function CourseRow({ course: c, onOpen, mainSchool }: { course: Course; onOpen(id: string): void; mainSchool: string }) {
+function CourseCell({ course: c, onOpen, mainSchool }: { course: Course; onOpen(id: string): void; mainSchool: string }) {
   const mark = officialMark(c);
   const canOpen = !!c.report || mark !== null || !!c.reportError;
+  const details = [c.code, c.block && `Block ${c.block}`, c.room && `Rm ${c.room}`].filter(Boolean).join(' · ');
   return (
-    <button className="card row" onClick={() => canOpen && onOpen(c.id)} disabled={!canOpen}>
+    <button className="cell course-cell" onClick={() => canOpen && onOpen(c.id)} disabled={!canOpen}>
       <SubjectBadge code={c.code} />
-      <div className="row-main">
-        <div className="row-title">{displayName(c)}</div>
-        <div className="row-sub">
-          {c.code}
-          {c.block && ` · ${c.block}`}
-          {c.room && ` · Rm ${c.room}`}
-        </div>
-        {c.school && c.school !== mainSchool && <div className="row-sub faint">{c.school}</div>}
-      </div>
-      <div className="row-right">
-        {mark !== null ? (
-          <div className="row-mark" style={{ color: markColor(mark) }}>
-            {fmt(mark)}
-            <span className="pct">%</span>
-          </div>
-        ) : (
-          <div className="row-none">No mark</div>
-        )}
-        {c.midterm !== null && <div className="chip">Midterm {fmt(c.midterm, 0)}%</div>}
-      </div>
-      {canOpen && (
-        <span className="row-chev">
-          <Icon name="chevron" size={18} />
+      <span className="cell-main">
+        <span className="cell-title">{displayName(c)}</span>
+        <span className="cell-sub">{details}</span>
+        {c.school && c.school !== mainSchool && <span className="cell-sub">{c.school}</span>}
+      </span>
+      <span className="cell-end">
+        {mark !== null ? <Mark value={mark} className="cell-mark" /> : <span className="cell-none">No mark</span>}
+        {c.midterm !== null && <span className="cell-midterm">Midterm {Math.round(c.midterm)}%</span>}
+      </span>
+      {canOpen ? (
+        <span className="chev">
+          <Icon name="chevron" size={16} />
         </span>
+      ) : (
+        <span className="chev-space" />
       )}
     </button>
   );

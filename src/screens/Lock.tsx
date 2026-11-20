@@ -21,26 +21,30 @@ export function PinPad({ onComplete, error }: { onComplete(pin: string): void | 
       }
     }
   };
+  const keys: Array<[string, string]> = [
+    ['1', ''], ['2', 'ABC'], ['3', 'DEF'], ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'], ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'],
+  ];
   return (
     <div className="pinpad">
-      <div className={`pin-dots ${error ? 'shake' : ''}`} aria-live="polite">
+      <div className={`pin-dots ${error ? 'shake' : ''}`} key={error} aria-live="polite">
         {Array.from({ length: LEN }, (_, i) => (
           <span key={i} className={i < pin.length ? 'on' : ''} />
         ))}
       </div>
-      <div className="pin-error">{busy ? 'Checking…' : error}</div>
+      <div className="pin-error">{busy ? '' : error}</div>
       <div className="pin-keys">
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
+        {keys.map(([d, letters]) => (
           <button key={d} onClick={() => void press(d)} aria-label={d}>
-            {d}
+            <span className="digit">{d}</span>
+            <span className="letters">{letters}</span>
           </button>
         ))}
         <span />
         <button onClick={() => void press('0')} aria-label="0">
-          0
+          <span className="digit">0</span>
         </button>
         <button onClick={() => setPin(pin.slice(0, -1))} aria-label="Delete" className="pin-del">
-          ⌫
+          {pin.length ? 'Delete' : ''}
         </button>
       </div>
     </div>
@@ -51,11 +55,11 @@ export function LockScreen() {
   const { unlock } = useStore();
   const [error, setError] = useState('');
   return (
-    <div className="screen center-screen">
-      <div className="lock-icon">
-        <Icon name="lock" size={34} />
-      </div>
-      <h1>Enter PIN</h1>
+    <div className="lock-screen">
+      <span className="lock-icon">
+        <Icon name="lock" size={26} />
+      </span>
+      <div className="lock-title">Enter PIN</div>
       <PinPad
         error={error}
         onComplete={async (pin) => {

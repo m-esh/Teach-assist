@@ -7,7 +7,7 @@ A fast, ad-free, private TeachAssist (YRDSB) app for one person. Install it on a
 - **What-if:** add, edit or remove evaluations to see a projected mark. Changes reset when you close the app.
 - **What do I need?** shows the mark you need on the next evaluation to reach a target.
 - **Updates:** new evaluations, mark changes, midterms and average changes found on each sync.
-- **Settings:** an optional 6-digit PIN that encrypts everything on the device (AES-GCM, PBKDF2 310k). Ten wrong PINs erase the data.
+- **Settings:** 9 colour themes (Purple, Indigo, Blue, Teal, Green, Orange, Pink, Brown, Graphite), Automatic/Light/Dark appearance, and an optional 6-digit PIN that encrypts everything on the device (AES-GCM, PBKDF2 310k). Ten wrong PINs erase the data.
 
 ## How it stays private
 

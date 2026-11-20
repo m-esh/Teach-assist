@@ -1,52 +1,88 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { Icon, Sheet, Toggle, timeAgo } from '../components/ui';
+import { Icon, IconTile, NavBar, Section, Segmented, Sheet, Toggle, timeAgo } from '../components/ui';
 import { PinPad } from './Lock';
+import { THEMES, loadLook, saveLook, type Appearance, type Look, type ThemeName } from '../lib/theme';
 
 export function SettingsScreen() {
   const s = useStore();
   const { settings, creds, snapshot } = s.vault;
+  const [look, setLook] = useState<Look>(loadLook);
   const [pinFlow, setPinFlow] = useState<null | 'set' | 'confirm'>(null);
   const [firstPin, setFirstPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [confirmErase, setConfirmErase] = useState(false);
   const [relayKey, setRelayKey] = useState(settings.relayKey);
 
+  const updateLook = (patch: Partial<Look>) => {
+    const next = { ...look, ...patch };
+    setLook(next);
+    saveLook(next);
+  };
   const masked = creds ? creds.username.replace(/.(?=.{3})/g, '•') : '';
 
   return (
     <div className="screen">
-      <header className="top">
-        <div>
-          <h1>Settings</h1>
-        </div>
-      </header>
+      <NavBar title="Settings" />
 
-      <h3 className="group-label">Account</h3>
-      <div className="card settings">
-        <div className="setting">
-          <span>Student number</span>
-          <span className="muted">{masked}</span>
+      <Section header="Theme">
+        <div className="cell swatch-cell">
+          <div className="swatches" role="radiogroup" aria-label="Theme colour">
+            {(Object.keys(THEMES) as ThemeName[]).map((t) => (
+              <button
+                key={t}
+                role="radio"
+                aria-checked={look.theme === t}
+                aria-label={THEMES[t].name}
+                className={`swatch ${look.theme === t ? 'on' : ''}`}
+                data-swatch={t}
+                onClick={() => updateLook({ theme: t })}
+              >
+                <span>{look.theme === t && <Icon name="check" size={16} />}</span>
+                <em>{THEMES[t].name}</em>
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="setting">
-          <span>Last synced</span>
-          <span className="muted">{timeAgo(snapshot?.fetchedAt)}</span>
+        <div className="cell">
+          <Segmented<Appearance>
+            label="Appearance"
+            value={look.appearance}
+            onChange={(appearance) => updateLook({ appearance })}
+            options={[
+              ['system', 'Automatic'],
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+            ]}
+          />
         </div>
-        <button className="setting action" onClick={() => void s.sync()} disabled={s.syncing}>
-          <span>{s.syncing ? 'Syncing…' : 'Sync now'}</span>
-          <Icon name="refresh" size={18} />
+      </Section>
+
+      <Section header="Account">
+        <div className="cell">
+          <IconTile name="person" color="var(--c-blue)" />
+          <span className="cell-main">
+            <span className="cell-title">Student Number</span>
+          </span>
+          <span className="cell-value">{masked}</span>
+        </div>
+        <button className="cell" onClick={() => void s.sync()} disabled={s.syncing}>
+          <IconTile name="refresh" color="var(--c-green)" />
+          <span className="cell-main">
+            <span className="cell-title">{s.syncing ? 'Syncing…' : 'Sync Now'}</span>
+          </span>
+          <span className="cell-value">{timeAgo(snapshot?.fetchedAt)}</span>
         </button>
-      </div>
+      </Section>
 
-      <h3 className="group-label">Security</h3>
-      <div className="card settings">
-        <div className="setting">
-          <span>
-            App PIN
-            <div className="faint small">Encrypts everything stored on this device</div>
+      <Section header="Privacy & Security" footer="A PIN encrypts everything this app stores on your phone. Ten wrong attempts erase it.">
+        <div className="cell">
+          <IconTile name="lock" color="var(--c-gray)" />
+          <span className="cell-main">
+            <span className="cell-title">Require PIN</span>
           </span>
           <Toggle
-            label="App PIN"
+            label="Require PIN"
             checked={s.hasPin}
             onChange={(on) => {
               setPinError('');
@@ -56,95 +92,102 @@ export function SettingsScreen() {
           />
         </div>
         {s.hasPin && (
-          <button className="setting action" onClick={() => setPinFlow('set')}>
-            <span>Change PIN</span>
-            <Icon name="lock" size={18} />
+          <button className="cell" onClick={() => setPinFlow('set')}>
+            <IconTile name="key" color="var(--c-gray)" />
+            <span className="cell-main">
+              <span className="cell-title">Change PIN</span>
+            </span>
+            <span className="chev">
+              <Icon name="chevron" size={16} />
+            </span>
           </button>
         )}
-      </div>
+      </Section>
 
-      <h3 className="group-label">App</h3>
-      <div className="card settings">
-        <div className="setting">
-          <span>
-            Refresh when opened
-            <div className="faint small">Checks TeachAssist each time you open the app</div>
+      <Section header="General">
+        <div className="cell">
+          <IconTile name="clock" color="var(--c-orange)" />
+          <span className="cell-main">
+            <span className="cell-title">Refresh on Open</span>
           </span>
-          <Toggle label="Refresh when opened" checked={settings.autoRefresh} onChange={(v) => s.updateSettings({ autoRefresh: v })} />
+          <Toggle label="Refresh on open" checked={settings.autoRefresh} onChange={(v) => s.updateSettings({ autoRefresh: v })} />
         </div>
-        <div className="setting">
-          <span>Hide courses without marks</span>
+        <div className="cell">
+          <IconTile name="eye" color="var(--c-teal)" />
+          <span className="cell-main">
+            <span className="cell-title">Hide Courses Without Marks</span>
+          </span>
           <Toggle label="Hide courses without marks" checked={settings.hideEmptyCourses} onChange={(v) => s.updateSettings({ hideEmptyCourses: v })} />
         </div>
-        <button className="setting action" onClick={s.clearUpdates}>
-          <span>Clear update history</span>
-          <Icon name="trash" size={18} />
-        </button>
-      </div>
+      </Section>
 
-      <h3 className="group-label">Advanced</h3>
-      <div className="card settings">
-        <label className="setting col">
-          <span>
-            Relay access key
-            <div className="faint small">Only needed if one was set up for the server. Leave blank otherwise.</div>
-          </span>
+      <Section header="Advanced" footer="Only needed if an access key was set for your relay. Leave blank otherwise.">
+        <label className="cell field-cell">
+          <span className="cell-title">Relay Key</span>
           <input
             type="password"
             autoComplete="off"
             value={relayKey}
+            placeholder="None"
             onChange={(e) => setRelayKey(e.target.value)}
             onBlur={() => relayKey !== settings.relayKey && s.updateSettings({ relayKey })}
             aria-label="Relay access key"
+            className="right-input"
           />
         </label>
-      </div>
+      </Section>
 
-      <div className="card settings">
-        <button className="setting action danger" onClick={() => setConfirmErase(true)}>
-          <span>Sign out and erase this device</span>
-          <Icon name="trash" size={18} />
+      <Section>
+        <button className="cell" onClick={() => setConfirmErase(true)}>
+          <span className="cell-title danger center-text">Sign Out</span>
         </button>
-      </div>
+      </Section>
 
-      <div className="about faint small">
-        <p>
-          Private TeachAssist. Your password and marks are stored only on this device. Each sync sends your login through this app's own relay
-          straight to ta.yrdsb.ca; the relay keeps nothing and logs nothing.
-        </p>
-        <p>Not affiliated with YRDSB or the teachassist foundation.</p>
-      </div>
+      <p className="about">
+        Your password and marks are stored only on this device. Each sync goes through your own private relay straight to ta.yrdsb.ca; the relay keeps nothing.
+        <br />
+        Not affiliated with YRDSB or the teachassist foundation.
+      </p>
 
-      <Sheet open={pinFlow !== null} title={pinFlow === 'confirm' ? 'Confirm PIN' : 'Choose a 6-digit PIN'} onClose={() => setPinFlow(null)}>
-        <PinPad
-          key={pinFlow ?? 'x'}
-          error={pinError}
-          onComplete={async (pin) => {
-            if (pinFlow === 'set') {
-              setFirstPin(pin);
-              setPinError('');
-              setPinFlow('confirm');
-            } else if (pin !== firstPin) {
-              setPinError("PINs didn't match. Try again.");
-              setPinFlow('set');
-            } else {
-              await s.setPin(pin);
-              setPinFlow(null);
-            }
-          }}
-        />
-        <p className="faint small center">If you forget it, you'll need to sign in again. Ten wrong tries erase the app's data.</p>
+      <Sheet open={pinFlow !== null} title={pinFlow === 'confirm' ? 'Confirm PIN' : 'New PIN'} onClose={() => setPinFlow(null)}>
+        <div className="pin-sheet">
+          <p className="pin-prompt">{pinFlow === 'confirm' ? 'Enter it again to confirm' : 'Choose a 6-digit PIN'}</p>
+          <PinPad
+            key={pinFlow ?? 'x'}
+            error={pinError}
+            onComplete={async (pin) => {
+              if (pinFlow === 'set') {
+                setFirstPin(pin);
+                setPinError('');
+                setPinFlow('confirm');
+              } else if (pin !== firstPin) {
+                setPinError("PINs didn't match. Try again.");
+                setPinFlow('set');
+              } else {
+                await s.setPin(pin);
+                setPinFlow(null);
+              }
+            }}
+          />
+        </div>
       </Sheet>
 
-      <Sheet open={confirmErase} title="Sign out?" onClose={() => setConfirmErase(false)}>
-        <p className="muted">This removes your login, saved marks and update history from this device.</p>
-        <button className="btn danger block" onClick={s.signOut}>
-          Sign out and erase
-        </button>
-        <button className="btn ghost block" onClick={() => setConfirmErase(false)}>
-          Cancel
-        </button>
-      </Sheet>
+      {confirmErase && (
+        <div className="alert-backdrop" onClick={() => setConfirmErase(false)}>
+          <div className="alert" role="alertdialog" aria-label="Sign out" onClick={(e) => e.stopPropagation()}>
+            <div className="alert-body">
+              <div className="alert-title">Sign Out?</div>
+              <div className="alert-text">Your login, saved marks and update history will be erased from this device.</div>
+            </div>
+            <div className="alert-actions">
+              <button onClick={() => setConfirmErase(false)}>Cancel</button>
+              <button className="danger bold" onClick={s.signOut}>
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

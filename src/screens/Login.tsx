@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
+import { Icon } from '../components/ui';
 
 export function LoginScreen() {
   const { signIn } = useStore();
@@ -21,47 +22,50 @@ export function LoginScreen() {
   };
 
   return (
-    <div className="screen center-screen login">
-      <img src="/icon.svg" alt="" className="login-logo" width={84} height={84} />
-      <h1>TeachAssist</h1>
-      <p className="muted center">Your marks, without the ads.</p>
-      <form className="card login-card" onSubmit={submit}>
-        <label className="field">
-          <span>Student number</span>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            inputMode="numeric"
-            autoComplete="username"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            aria-label="Student number"
-          />
-        </label>
-        <label className="field">
-          <span>Password</span>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" aria-label="Password" />
-        </label>
-        {showAdvanced ? (
-          <label className="field">
-            <span>Relay access key (optional)</span>
-            <input type="password" value={relayKey} onChange={(e) => setRelayKey(e.target.value)} autoComplete="off" aria-label="Relay access key" />
+    <div className="login">
+      <div className="login-head">
+        <img src="/icon.svg" alt="" className="login-logo" width={76} height={76} />
+        <h1>TeachAssist</h1>
+        <p>Sign in with your YRDSB student number.</p>
+      </div>
+      <form onSubmit={submit} className="login-form">
+        <div className="group">
+          <label className="cell field-cell">
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Student number"
+              inputMode="numeric"
+              autoComplete="username"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-label="Student number"
+            />
           </label>
-        ) : (
-          <button type="button" className="link small" onClick={() => setShowAdvanced(true)}>
+          <label className="cell field-cell">
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" autoComplete="current-password" aria-label="Password" />
+          </label>
+          {showAdvanced && (
+            <label className="cell field-cell">
+              <input type="password" value={relayKey} onChange={(e) => setRelayKey(e.target.value)} placeholder="Relay key (optional)" autoComplete="off" aria-label="Relay access key" />
+            </label>
+          )}
+        </div>
+        {error && <div className="form-error">{error}</div>}
+        <button className="btn-primary" disabled={busy || !username.trim() || !password}>
+          {busy ? <span className="spinner" aria-label="Signing in" /> : 'Sign In'}
+        </button>
+        {!showAdvanced && (
+          <button type="button" className="text-btn" onClick={() => setShowAdvanced(true)}>
             Advanced
           </button>
         )}
-        {error && <div className="banner warn">{error}</div>}
-        <button className="btn primary block" disabled={busy || !username.trim() || !password}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
       </form>
-      <p className="faint small center privacy">
-        Your login is saved only on this phone and is sent only to TeachAssist (through this app's private relay, which stores nothing). You can add a PIN in
-        Settings.
-      </p>
+      <div className="login-privacy">
+        <Icon name="shield" size={18} />
+        <span>Your login stays on this phone and is only ever sent to TeachAssist, through your own private relay that stores nothing.</span>
+      </div>
     </div>
   );
 }
