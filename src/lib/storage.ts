@@ -21,11 +21,23 @@ export interface Vault {
   settings: Settings;
   /** course code -> category key -> weight (user corrections) */
   weightOverrides: Record<string, Record<string, number>>;
+  /** course code -> saved "What do I need?" setup */
+  neededPlans: Record<string, NeededPlan>;
+}
+
+export interface NeededPlan {
+  target: number;
+  /** Regular evaluations still to come. */
+  left: number;
+  /** Weight of each remaining evaluation, per category. */
+  weights: Record<string, number>;
+  /** Whether a final exam/culminating task is still to come. */
+  final: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = { autoRefresh: true, hideEmptyCourses: false, relayKey: '' };
 
-export const emptyVault = (): Vault => ({ updates: [], settings: { ...DEFAULT_SETTINGS }, weightOverrides: {} });
+export const emptyVault = (): Vault => ({ updates: [], settings: { ...DEFAULT_SETTINGS }, weightOverrides: {}, neededPlans: {} });
 
 const KEY = 'ta.vault.v1';
 const FAILS = 'ta.pinFails';
@@ -87,6 +99,7 @@ function normalise(v: Partial<Vault>): Vault {
     settings: { ...DEFAULT_SETTINGS, ...(v.settings ?? {}) },
     updates: v.updates ?? [],
     weightOverrides: v.weightOverrides ?? {},
+    neededPlans: v.neededPlans ?? {},
   };
 }
 

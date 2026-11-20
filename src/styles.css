@@ -1868,3 +1868,8 @@ button.row:active:not(:disabled),
     transition-duration: 0.01ms !important;
   }
 }
+
+.needed-row .row-sub {
+  white-space: normal;
+  line-height: 1.35;
+}

@@ -154,15 +154,29 @@ export function requiredForTarget(
   evalWeights: Record<string, number>,
   target: number,
 ): RequiredResult {
-  const active = Object.entries(evalWeights).filter(([, w]) => w > 0);
-  if (!active.length || !Number.isFinite(target)) return { kind: 'invalid' };
+  return requiredForEvaluations(report, weights, assessments, [evalWeights], target);
+}
+
+/**
+ * Same score needed on every one of several upcoming evaluations (each given as
+ * per-category weights) to finish at `target`.
+ */
+export function requiredForEvaluations(
+  report: Pick<CourseReport, 'categories'>,
+  weights: Record<string, number>,
+  assessments: Assessment[],
+  evals: Array<Record<string, number>>,
+  target: number,
+): RequiredResult {
+  const upcoming = evals.map((e) => Object.entries(e).filter(([, w]) => w > 0)).filter((e) => e.length);
+  if (!upcoming.length || !Number.isFinite(target)) return { kind: 'invalid' };
   const markWith = (pct: number) => {
-    const hyp: Assessment = {
-      id: '__needed',
+    const hyps: Assessment[] = upcoming.map((active, i) => ({
+      id: `__needed${i}`,
       name: 'needed',
       marks: Object.fromEntries(active.map(([k, w]) => [k, { got: pct, outOf: 100, weight: w }])),
-    };
-    return courseMark(report, weights, [...assessments, hyp]) ?? 0;
+    }));
+    return courseMark(report, weights, [...assessments, ...hyps]) ?? 0;
   };
   const min = markWith(0);
   const max = markWith(100);

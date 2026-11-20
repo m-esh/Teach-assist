@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { averageMark, categoryAverages, courseMark, headlineAverage, officialMark, requiredForTarget } from '../src/lib/calc';
+import { averageMark, categoryAverages, courseMark, headlineAverage, officialMark, requiredForEvaluations, requiredForTarget } from '../src/lib/calc';
 import { levelToPercent, parseCourseList, parseReport } from '../src/lib/parse';
 
 const fx = (n: string) => readFileSync(join(__dirname, 'fixtures', n), 'utf8');
@@ -174,5 +174,29 @@ describe('average uses final, then current, then midterm marks', () => {
     expect(avg.count).toBe(3);
     expect(avg.midterms).toBe(2);
     expect(avg.value).toBeCloseTo((91 + 84.2 + 95) / 3, 6);
+  });
+});
+
+describe('what do I need across several remaining evaluations', () => {
+  const r = parseReport(fx('report-ktca.html'))!;
+  const k = r.categories[0].key;
+  const f = r.categories.find((c) => c.short === 'F')!.key;
+
+  it('finds one score that, on every remaining evaluation, lands exactly on the target', () => {
+    const evals = [{ [k]: 10 }, { [k]: 10 }, { [f]: 1 }];
+    const res = requiredForEvaluations(r, r.weights, r.assessments, evals, 84.5);
+    expect(res.kind).toBe('needed');
+    const p = res.percent!;
+    const check = courseMark(r, r.weights, [
+      ...r.assessments,
+      ...evals.map((e, i) => ({ id: `x${i}`, name: 'x', marks: Object.fromEntries(Object.entries(e).map(([key, w]) => [key, { got: p, outOf: 100, weight: w }])) })),
+    ]);
+    expect(check).toBeCloseTo(84.5, 4);
+  });
+
+  it('needs less per evaluation when more of them are left', () => {
+    const one = requiredForEvaluations(r, r.weights, r.assessments, [{ [k]: 10 }], 84.2).percent!;
+    const three = requiredForEvaluations(r, r.weights, r.assessments, [{ [k]: 10 }, { [k]: 10 }, { [k]: 10 }], 84.2).percent!;
+    expect(three).toBeLessThan(one);
   });
 });

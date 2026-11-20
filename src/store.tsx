@@ -3,7 +3,7 @@ import { fetchSnapshot, SyncError } from './lib/api';
 import { diffSnapshots, mergeUpdates } from './lib/updates';
 import * as storage from './lib/storage';
 import type { Assessment, Course } from './lib/types';
-import type { Settings, Vault } from './lib/storage';
+import type { NeededPlan, Settings, Vault } from './lib/storage';
 
 /** What-if edits for one course. Kept in memory only, so they reset each session. */
 export interface WhatIf {
@@ -27,6 +27,7 @@ interface Store {
   setPin(pin: string | null): Promise<void>;
   updateSettings(s: Partial<Settings>): void;
   setWeights(courseCode: string, weights: Record<string, number> | null): void;
+  setNeededPlan(courseCode: string, plan: NeededPlan): void;
   markUpdatesSeen(): void;
   clearUpdates(): void;
   signOut(): void;
@@ -157,6 +158,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (weights) o[code] = weights;
         else delete o[code];
         persist({ ...vaultRef.current, weightOverrides: o });
+      },
+      setNeededPlan(code, plan) {
+        const v = vaultRef.current;
+        persist({ ...v, neededPlans: { ...v.neededPlans, [code]: plan } });
       },
       markUpdatesSeen() {
         const v = vaultRef.current;

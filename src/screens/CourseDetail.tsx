@@ -8,11 +8,12 @@ import {
   effectiveReport,
   fmt,
   officialMark,
-  requiredForTarget,
+  requiredForEvaluations,
 } from '../lib/calc';
 import type { Assessment, CatMark, Course, CourseReport } from '../lib/types';
 import { emptyWhatIf, useStore, type WhatIf } from '../store';
-import { Delta, GlassButton, Icon, Mark, MiniRing, NavBar, NumberInput, Ring, Section, Sheet, Stepper, TrendChart } from '../components/ui';
+import { Delta, GlassButton, Icon, Mark, MiniRing, NavBar, NumberInput, Ring, Section, Sheet, Stepper, Toggle, TrendChart } from '../components/ui';
+import type { NeededPlan } from '../lib/storage';
 import { displayName } from './Courses';
 
 function applyWhatIf(report: CourseReport, w: WhatIf): Assessment[] {
@@ -171,7 +172,7 @@ export function CourseDetail({ course, onBack }: { course: Course; onBack(): voi
             })}
           </Section>
 
-          <NeededSection report={report} assessments={assessments} current={shown} offset={official !== null && baseCalc !== null ? official - baseCalc : 0} />
+          <NeededSection courseCode={course.code} report={report} assessments={assessments} current={shown} offset={official !== null && baseCalc !== null ? official - baseCalc : 0} />
 
           <Section
             header="Evaluations"
@@ -444,43 +445,102 @@ function EvalEditor({ report, initial, onClose, onSave }: { report: CourseReport
   );
 }
 
-function NeededSection({ report, assessments, current, offset }: { report: CourseReport; assessments: Assessment[]; current: number | null; offset: number }) {
+const isFinalCat = (label: string) => /final|culminat|exam|summative/i.test(label);
+
+function NeededSection({
+  courseCode,
+  report,
+  assessments,
+  current,
+  offset,
+}: {
+  courseCode: string;
+  report: CourseReport;
+  assessments: Assessment[];
+  current: number | null;
+  offset: number;
+}) {
+  const store = useStore();
   const withData = categoriesWithData(report);
-  const firstCat = withData[0] ?? report.categories[0]?.key;
-  const [target, setTarget] = useState(current === null ? 85 : Math.min(100, Math.floor(current / 5) * 5 + 5));
+  const finalCats = report.categories.filter((c) => isFinalCat(c.label));
+  const finalPending = finalCats.length > 0 && finalCats.every((c) => !withData.includes(c.key));
+  const regularCats = report.categories.filter((c) => !finalCats.includes(c));
+  const firstCat = withData.find((k) => regularCats.some((c) => c.key === k)) ?? regularCats[0]?.key ?? report.categories[0]?.key;
+
+  const saved = store.vault.neededPlans[courseCode];
+  const plan: NeededPlan = {
+    target: saved?.target ?? (current === null ? 85 : Math.min(100, Math.floor(current / 5) * 5 + 5)),
+    left: saved?.left ?? 1,
+    weights: saved?.weights ?? Object.fromEntries(firstCat ? [[firstCat, typicalWeight(report, firstCat)]] : []),
+    final: saved?.final ?? finalPending,
+  };
+  const update = (patch: Partial<NeededPlan>) => store.setNeededPlan(courseCode, { ...plan, ...patch });
+
+  // Weight inputs keep their text while typing; the saved number updates as you go.
+  const [weightText, setWeightText] = useState<Record<string, string>>(() =>
+    Object.fromEntries(report.categories.map((c) => [c.key, plan.weights[c.key] ? String(plan.weights[c.key]) : ''])),
+  );
   const [showWeights, setShowWeights] = useState(false);
-  const [weights, setWeights] = useState<Record<string, string>>(() =>
-    Object.fromEntries(report.categories.map((c) => [c.key, c.key === firstCat ? String(typicalWeight(report, c.key)) : ''])),
-  );
-  const evalWeights = Object.fromEntries(Object.entries(weights).map(([k, v]) => [k, parseFloat(v) || 0]));
-  const res = useMemo(
-    () => {
-      const r = requiredForTarget(report, report.weights, assessments, evalWeights, target - offset);
-      return { ...r, max: r.max === undefined ? undefined : r.max + offset, min: r.min === undefined ? undefined : r.min + offset };
-    },
+
+  const includeFinal = plan.final && finalCats.length > 0;
+  const evals = useMemo(() => {
+    const list: Array<Record<string, number>> = Array.from({ length: plan.left }, () => plan.weights);
+    if (includeFinal) list.push(Object.fromEntries(finalCats.map((c) => [c.key, 1])));
+    return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [report, assessments, JSON.stringify(evalWeights), target, offset],
-  );
+  }, [plan.left, JSON.stringify(plan.weights), includeFinal]);
+
+  const res = useMemo(() => {
+    const r = requiredForEvaluations(report, report.weights, assessments, evals, plan.target - offset);
+    return { ...r, max: r.max === undefined ? undefined : r.max + offset, min: r.min === undefined ? undefined : r.min + offset };
+  }, [report, assessments, evals, plan.target, offset]);
+
   const weightSummary = report.categories
-    .filter((c) => evalWeights[c.key] > 0)
-    .map((c) => `${c.short} ×${trim(evalWeights[c.key])}`)
+    .filter((c) => (plan.weights[c.key] ?? 0) > 0)
+    .map((c) => `${c.short} ×${trim(plan.weights[c.key])}`)
     .join(', ');
+  const what = [
+    plan.left > 0 && (plan.left === 1 ? 'your next evaluation' : `each of your ${plan.left} remaining evaluations`),
+    includeFinal && (plan.left > 0 ? 'the final' : 'your final'),
+  ]
+    .filter(Boolean)
+    .join(' and ');
 
   return (
-    <Section header="What do I need?" footer="Includes any what-if changes you've made.">
+    <Section header="What do I need?" footer="Saved for this course. Includes any what-if changes you've made.">
       <div className="row">
         <span className="row-main">
           <span className="row-title">I want to finish with</span>
         </span>
-        <span className="target-value">{target}%</span>
-        <Stepper value={target} onChange={setTarget} min={50} max={100} label="target mark" />
+        <span className="target-value">{plan.target}%</span>
+        <Stepper value={plan.target} onChange={(target) => update({ target })} min={50} max={100} label="target mark" />
       </div>
+      <div className="row">
+        <span className="row-main">
+          <span className="row-title">Evaluations left</span>
+        </span>
+        <span className="target-value">{plan.left}</span>
+        <Stepper value={plan.left} onChange={(left) => update({ left })} min={includeFinal ? 0 : 1} max={20} label="evaluations left" />
+      </div>
+      {finalCats.length > 0 && (
+        <div className="row">
+          <span className="row-main">
+            <span className="row-title">Final still to come</span>
+            <span className="row-sub">{finalCats.map((c) => c.label).join(', ')}</span>
+          </span>
+          <Toggle
+            label="Final still to come"
+            checked={includeFinal}
+            onChange={(final) => update({ final, left: !final && plan.left === 0 ? 1 : plan.left })}
+          />
+        </div>
+      )}
       <div className="row needed-row">
         <Gauge value={res.kind === 'needed' ? res.percent ?? null : res.kind === 'guaranteed' ? 0 : res.kind === 'impossible' ? 100 : null} state={res.kind} />
         {res.kind === 'needed' && (
           <>
             <Mark value={res.percent} className="needed-mark" />
-            <span className="row-sub">needed on your next evaluation</span>
+            <span className="row-sub">needed on {what}</span>
           </>
         )}
         {res.kind === 'guaranteed' && (
@@ -493,29 +553,45 @@ function NeededSection({ report, assessments, current, offset }: { report: Cours
         )}
         {res.kind === 'impossible' && (
           <>
-            <span className="needed-msg">Out of reach on one evaluation</span>
-            <span className="row-sub">100% would bring you to {fmt(res.max)}%.</span>
+            <span className="needed-msg">Out of reach</span>
+            <span className="row-sub">100% on {what} would bring you to {fmt(res.max)}%.</span>
           </>
         )}
-        {res.kind === 'invalid' && <span className="row-sub">Give the next evaluation a weight in at least one category.</span>}
+        {res.kind === 'invalid' && <span className="row-sub">Give the remaining evaluations a weight in at least one category.</span>}
       </div>
-      <button className="row" onClick={() => setShowWeights(!showWeights)} aria-expanded={showWeights}>
-        <span className="row-main">
-          <span className="row-title">Next evaluation counts as</span>
-        </span>
-        <span className="row-value">{weightSummary || 'Set weight'}</span>
-        <span className={`chev ${showWeights ? 'down' : ''}`}>
-          <Icon name="chevron" size={16} />
-        </span>
-      </button>
-      {showWeights &&
-        report.categories.map((c) => (
+      {plan.left > 0 && (
+        <button className="row" onClick={() => setShowWeights(!showWeights)} aria-expanded={showWeights}>
+          <span className="row-main">
+            <span className="row-title">{plan.left === 1 ? 'It counts as' : 'Each one counts as'}</span>
+          </span>
+          <span className="row-value">{weightSummary || 'Set weight'}</span>
+          <span className={`chev ${showWeights ? 'down' : ''}`}>
+            <Icon name="chevron" size={16} />
+          </span>
+        </button>
+      )}
+      {plan.left > 0 &&
+        showWeights &&
+        regularCats.map((c) => (
           <label className="row sub-row" key={c.key}>
             <span className="letter">{c.short}</span>
             <span className="row-main">
               <span className="row-title">{c.label}</span>
             </span>
-            <NumberInput value={weights[c.key]} onChange={(v) => setWeights((w) => ({ ...w, [c.key]: v }))} ariaLabel={`${c.label} weight`} placeholder="0" className="small-num" />
+            <NumberInput
+              value={weightText[c.key] ?? ''}
+              onChange={(v) => {
+                setWeightText((w) => ({ ...w, [c.key]: v }));
+                const n = parseFloat(v) || 0;
+                const next = { ...plan.weights };
+                if (n > 0) next[c.key] = n;
+                else delete next[c.key];
+                update({ weights: next });
+              }}
+              ariaLabel={`${c.label} weight`}
+              placeholder="0"
+              className="small-num"
+            />
           </label>
         ))}
     </Section>
