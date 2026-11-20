@@ -125,3 +125,28 @@ describe('expectations-based report (Term Work {65})', () => {
     expect(levelToPercent('banana')).toBeNull();
   });
 });
+
+describe('expectations report laid out with divs instead of tables', () => {
+  const r = parseReport(fx('report-expectations-divs.html'))!;
+
+  it('still finds every task, its section, expectation, weight and feedback', () => {
+    expect(r.format).toBe('expectations');
+    expect(r.assessments.map((a) => [a.name, Object.keys(a.marks)[0]])).toEqual([
+      ['Portfolio Check', 'term'],
+      ['Design Log', 'term'],
+      ['Participation', 'attendance'],
+    ]);
+    expect(r.assessments[0]).toMatchObject({ expectation: 'B2.', feedback: 'Great sketches' });
+    expect(r.assessments[0].marks.term).toMatchObject({ got: 95, outOf: 100, weight: 1 });
+    expect(categoryAverages(r, r.assessments).term).toBeCloseTo(97.5, 6);
+  });
+});
+
+describe('expectations report whose tasks cannot be read', () => {
+  it("falls back to TeachAssist's Term Work mark instead of the list page's 0.0%", () => {
+    const r = parseReport(fx('report-expectations-unreadable.html'))!;
+    const course = { ...parseCourseList(fx('list.html'))[3], report: r };
+    expect(course.listMark).toBe(0);
+    expect(officialMark(course)).toBe(99.3);
+  });
+});

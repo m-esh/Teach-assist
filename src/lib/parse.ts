@@ -394,6 +394,64 @@ function sectionOf(context: string): 'term' | 'final' | 'attendance' | null {
   return 'term';
 }
 
+/**
+ * Layout-agnostic reader for expectation reports: finds every "x / y" mark,
+ * climbs to the element that holds the whole row, and reads the cells around it
+ * (name before, weight after, an expectation code like "B2." anywhere).
+ */
+export function scanMarkRows(doc: Document): Assessment[] {
+  const out: Assessment[] = [];
+  const body = doc.body;
+  if (!body) return out;
+  const bodyText = body.textContent ?? '';
+  const seen = new Set<Element>();
+  const MARK_ONLY = /^(-?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/;
+
+  for (const el of Array.from(body.querySelectorAll('*'))) {
+    if (/^(SCRIPT|STYLE)$/.test(el.tagName)) continue;
+    const t = text(el);
+    const m = t.match(MARK_ONLY);
+    if (!m) continue;
+    // Use the innermost element holding the mark.
+    if (Array.from(el.children).some((c) => text(c) === t)) continue;
+
+    let cell: Element = el;
+    let row: Element | null = el.parentElement;
+    while (row && row !== body && ownCellsAny(row).length < 3) {
+      cell = row;
+      row = row.parentElement;
+    }
+    if (!row || row === body || seen.has(row)) continue;
+    seen.add(row);
+
+    const cells = ownCellsAny(row);
+    const idx = cells.indexOf(cell);
+    const texts = cells.map((c) => text(c));
+    const before = texts.slice(0, Math.max(idx, 0)).filter(Boolean);
+    const after = texts.slice(idx + 1);
+    const expectation = texts.find((x) => /^[A-Z]\d{1,2}\.?$/.test(x));
+    const name = before.find((x) => x !== expectation && !/^[A-Z]\d{1,2}\.?$/.test(x)) ?? 'Evaluation';
+    const wText = after.find((x) => /^\d+(?:\.\d+)?$/.test(x));
+    const weight = wText !== undefined ? num(wText) : 1;
+    const feedback = after.filter((x) => x && x !== wText && !/^\d+(?:\.\d+)?$/.test(x)).join(' ') || undefined;
+
+    const rawRow = row.textContent ?? '';
+    const pos = rawRow ? bodyText.indexOf(rawRow) : -1;
+    const context = pos >= 0 ? bodyText.slice(Math.max(0, pos - 800), pos) : '';
+    const section = sectionOf(context) ?? 'term';
+
+    const mark: CatMark = { got: num(m[1]), outOf: num(m[2]), weight };
+    if (exclusionOf(row)) mark.excluded = true;
+    out.push({ id: `${out.length}-${slug(name)}`, name, expectation, feedback, marks: { [section]: mark } });
+  }
+  return out;
+}
+
+/** Child elements that look like cells (td/th or any element child in div layouts). */
+function ownCellsAny(el: Element): Element[] {
+  return Array.from(el.children).filter((c) => !/^(BR|SCRIPT|STYLE)$/.test(c.tagName));
+}
+
 function parseExpectationsReport(doc: Document): CourseReport {
   const body = ws(doc.body?.textContent);
   const tw = body.match(/Term\s*Work\s*\{\s*(\d+(?:\.\d+)?)\s*\}\s*=?\s*(\d+(?:\.\d+)?)?\s*%?/i);
@@ -461,6 +519,11 @@ function parseExpectationsReport(doc: Document): CourseReport {
     el.childNodes.forEach(walk);
   };
   if (doc.body) walk(doc.body);
+  // Real pages don't always use <table> rows; fall back to a layout-agnostic scan.
+  if (!assessments.some((a) => Object.keys(a.marks).length)) {
+    assessments.length = 0;
+    assessments.push(...scanMarkRows(doc));
+  }
 
   const term = Number.isNaN(termWeight) ? 70 : termWeight;
   const rest = Math.max(0, 100 - term);

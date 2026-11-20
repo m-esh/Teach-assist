@@ -104,6 +104,8 @@ export function officialMark(course: Course): number | null {
   if (r) {
     const m = courseMark(r, r.weights, r.assessments);
     if (m !== null) return m;
+    // Couldn't read the evaluations: TeachAssist's own Term Work figure beats the list page.
+    if (r.format === 'expectations' && r.reportedAverages?.term !== undefined) return r.reportedAverages.term;
   }
   return course.listMark;
 }

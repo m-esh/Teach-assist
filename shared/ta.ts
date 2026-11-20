@@ -121,15 +121,23 @@ export async function syncTeachAssist(username: string, password: string, fetchF
   const ids = extractSubjectIds(listHtml);
   const reports: Record<string, string> = {};
   const failed: string[] = [];
-  await Promise.all(
-    ids.map(async (id) => {
+  // Two at a time with one retry: gentle on TeachAssist and resilient to a flaky page.
+  const queue = [...ids];
+  const worker = async () => {
+    for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+      const path = `/live/students/viewReport.php?subject_id=${id}&student_id=${studentId}`;
       try {
-        reports[id] = await getPage(`/live/students/viewReport.php?subject_id=${id}&student_id=${studentId}`, cookie, fetchFn);
+        reports[id] = await getPage(path, cookie, fetchFn);
       } catch {
-        failed.push(id);
+        try {
+          reports[id] = await getPage(path, cookie, fetchFn);
+        } catch {
+          failed.push(id);
+        }
       }
-    }),
-  );
+    }
+  };
+  await Promise.all([worker(), worker()]);
   return { studentId, fetchedAt: new Date().toISOString(), listHtml, reports, failed };
 }
 
