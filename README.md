@@ -26,8 +26,8 @@ iPhone (app + your data) ──HTTPS──▶ /api/sync relay (your Cloudflare) 
 This repo is set up for Cloudflare Workers (`wrangler.jsonc` + `worker/index.ts`).
 
 1. In the Cloudflare dashboard go to **Workers & Pages → Create → Import a repository** and pick this repo.
-2. Keep the defaults: project name `teach-assist`, build command `npm run build`, deploy command `npx wrangler deploy`.
-3. Click **Deploy**. You'll get a URL like `https://teach-assist.<you>.workers.dev`.
+2. Keep the defaults: project name `ta` (must match `name` in `wrangler.jsonc`), build command `npm run build`, deploy command `npx wrangler deploy`.
+3. Click **Deploy**. You'll get a URL like `https://ta.<your-subdomain>.workers.dev`.
 4. On the iPhone, open that URL in **Safari**, tap **Share → Add to Home Screen**, then open it from the Home Screen and sign in.
 
 Every push to the production branch redeploys automatically. (The `functions/` folder also lets the same repo deploy on Cloudflare Pages.)

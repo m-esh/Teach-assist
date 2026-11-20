@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "teach-assist",
+  "name": "ta",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
   // Serve on <name>.<subdomain>.workers.dev; no per-version preview URLs.
