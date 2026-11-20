@@ -1964,3 +1964,9 @@ button.row:active:not(:disabled),
   gap: 8px;
   margin-top: 6px;
 }
+.lock-hint {
+  font-size: 14px;
+  color: var(--label-2);
+  margin-top: -4px;
+  animation: fade 0.3s ease both;
+}

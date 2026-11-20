@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { Icon } from '../components/ui';
 import { bioEnabled } from '../lib/storage';
@@ -56,23 +56,45 @@ export function LockScreen() {
   const { unlock, unlockWithBio } = useStore();
   const [error, setError] = useState('');
   const [bioMsg, setBioMsg] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const busy = useRef(false);
   const bio = bioEnabled();
 
   const tryBio = async () => {
-    if (busy) return;
-    setBusy(true);
+    if (busy.current) return;
+    busy.current = true;
     setBioMsg('');
+    const started = performance.now();
     const e = await unlockWithBio();
-    setBusy(false);
-    if (e) setBioMsg(e);
+    busy.current = false;
+    if (e === null) return;
+    // iOS refuses Face ID before the first touch, and says no instantly. In that
+    // case wait for the first tap anywhere instead of showing an error.
+    if (e === '' && performance.now() - started < 700) setArmed(true);
+    else if (e) setBioMsg(e);
   };
 
-  // Ask for Face ID as soon as the app opens (iOS may want a tap first; the button covers that).
   useEffect(() => {
-    if (bio) void tryBio();
+    if (!bio) return;
+    void tryBio();
+    const onVisible = () => document.visibilityState === 'visible' && void tryBio();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // First tap anywhere (except the number keys) starts Face ID.
+  useEffect(() => {
+    if (!armed) return;
+    const onTap = (e: Event) => {
+      if ((e.target as Element | null)?.closest('.pin-keys')) return;
+      setArmed(false);
+      void tryBio();
+    };
+    document.addEventListener('click', onTap, true);
+    return () => document.removeEventListener('click', onTap, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [armed]);
 
   return (
     <div className="lock-screen">
@@ -80,6 +102,7 @@ export function LockScreen() {
         <Icon name={bio ? 'faceid' : 'lock'} size={28} />
       </span>
       <div className="lock-title">{bio ? 'Unlock TeachAssist' : 'Enter PIN'}</div>
+      {bio && armed && <div className="lock-hint">Tap anywhere for Face ID</div>}
       <PinPad
         error={error || bioMsg}
         onComplete={async (pin) => {
@@ -88,7 +111,7 @@ export function LockScreen() {
         }}
       />
       {bio && (
-        <button className="text-btn face-btn" onClick={() => void tryBio()} disabled={busy}>
+        <button className="text-btn face-btn" onClick={() => void tryBio()}>
           <Icon name="faceid" size={20} /> Use Face ID
         </button>
       )}
