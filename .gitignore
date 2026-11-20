@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env*
+# Real TeachAssist pages contain personal info - never commit them
+samples/
+*.pdf
