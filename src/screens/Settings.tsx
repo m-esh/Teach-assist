@@ -11,6 +11,7 @@ export function SettingsScreen() {
   const [pinFlow, setPinFlow] = useState<null | 'set' | 'confirm'>(null);
   const [firstPin, setFirstPin] = useState('');
   const [pinError, setPinError] = useState('');
+  const [bioError, setBioError] = useState('');
   const [confirmErase, setConfirmErase] = useState(false);
   const [relayKey, setRelayKey] = useState(settings.relayKey);
 
@@ -75,7 +76,15 @@ export function SettingsScreen() {
         </button>
       </Section>
 
-      <Section header="Privacy & Security" footer="A PIN encrypts everything this app stores on your phone. Ten wrong attempts erase it.">
+      <Section
+        header="Privacy & Security"
+        footer={
+          bioError ||
+          (s.hasPin
+            ? 'Your PIN and Face ID each unlock the encryption on this phone. Ten wrong PINs erase the data.'
+            : 'A PIN encrypts everything this app stores on your phone. You can then turn on Face ID.')
+        }
+      >
         <div className="row">
           <IconTile name="lock" color="linear-gradient(150deg,#b4b4be,#7c7c86)" />
           <span className="row-main">
@@ -91,6 +100,25 @@ export function SettingsScreen() {
             }}
           />
         </div>
+        {s.hasPin && (
+          <div className="row">
+            <IconTile name="faceid" color="linear-gradient(150deg,#5be37d,#28b04b)" />
+            <span className="row-main">
+              <span className="row-title">Unlock with Face ID</span>
+            </span>
+            <Toggle
+              label="Unlock with Face ID"
+              checked={s.hasBio}
+              onChange={async (on) => {
+                setBioError('');
+                if (on) {
+                  const e = await s.enableBio();
+                  if (e) setBioError(e);
+                } else await s.disableBio();
+              }}
+            />
+          </div>
+        )}
         {s.hasPin && (
           <button className="row" onClick={() => setPinFlow('set')}>
             <IconTile name="key" color="linear-gradient(150deg,#b4b4be,#7c7c86)" />

@@ -21,6 +21,10 @@ interface Store {
   syncing: boolean;
   syncError: string | null;
   hasPin: boolean;
+  hasBio: boolean;
+  enableBio(): Promise<string | null>;
+  disableBio(): Promise<void>;
+  unlockWithBio(): Promise<string | null>;
   signIn(username: string, password: string, relayKey: string): Promise<string | null>;
   sync(): Promise<void>;
   unlock(pin: string): Promise<string | null>;
@@ -44,7 +48,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [whatIfs, setWhatIfs] = useState<Record<string, WhatIf>>({});
-  const session = useRef<storage.Session>({ key: null, salt: null });
+  const session = useRef<storage.Session>(storage.noSession());
   const vaultRef = useRef(vault);
   vaultRef.current = vault;
   const syncingRef = useRef(false);
@@ -116,7 +120,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       vault,
       syncing,
       syncError,
-      hasPin: !!session.current.key,
+      hasPin: !!session.current.dek,
+      hasBio: !!session.current.bio,
       async signIn(username, password, relayKey) {
         const v: Vault = { ...vaultRef.current, creds: { username, password }, settings: { ...vaultRef.current.settings, relayKey } };
         try {
@@ -136,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const r = await storage.unlock(pin);
         if ('error' in r) {
           if (r.wiped) {
-            session.current = { key: null, salt: null };
+            session.current = storage.noSession();
             enter(storage.emptyVault());
           }
           return r.error;
@@ -145,8 +150,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         enter(r.vault);
         return null;
       },
+      async enableBio() {
+        try {
+          session.current = await storage.enableBio(session.current);
+          await storage.save(vaultRef.current, session.current);
+          setVault({ ...vaultRef.current });
+          return null;
+        } catch (e) {
+          return e instanceof storage.BioError ? e.message : "Face ID couldn't be set up.";
+        }
+      },
+      async disableBio() {
+        session.current = { ...session.current, bio: null };
+        await storage.save(vaultRef.current, session.current);
+        setVault({ ...vaultRef.current });
+      },
+      async unlockWithBio() {
+        try {
+          const r = await storage.unlockWithBio();
+          session.current = r.session;
+          enter(r.vault);
+          return null;
+        } catch (e) {
+          return e instanceof storage.BioError ? (e.code === 'cancelled' ? '' : e.message) : "Face ID didn't work. Use your PIN.";
+        }
+      },
       async setPin(pin) {
-        session.current = pin ? await storage.sessionForPin(pin) : { key: null, salt: null };
+        session.current = pin ? await storage.sessionForPin(pin, session.current) : storage.noSession();
         await storage.save(vaultRef.current, session.current);
         setVault({ ...vaultRef.current });
       },
@@ -172,7 +202,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       signOut() {
         storage.wipeAll();
-        session.current = { key: null, salt: null };
+        session.current = storage.noSession();
         setWhatIfs({});
         setSyncError(null);
         setVault(storage.emptyVault());

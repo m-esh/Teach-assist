@@ -1958,3 +1958,9 @@ button.row:active:not(:disabled),
   flex: none;
   padding: 6px 2px;
 }
+.face-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}

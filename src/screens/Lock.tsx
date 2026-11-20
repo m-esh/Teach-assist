@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { Icon } from '../components/ui';
+import { bioEnabled } from '../lib/storage';
 
 const LEN = 6;
 
@@ -52,21 +53,45 @@ export function PinPad({ onComplete, error }: { onComplete(pin: string): void | 
 }
 
 export function LockScreen() {
-  const { unlock } = useStore();
+  const { unlock, unlockWithBio } = useStore();
   const [error, setError] = useState('');
+  const [bioMsg, setBioMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const bio = bioEnabled();
+
+  const tryBio = async () => {
+    if (busy) return;
+    setBusy(true);
+    setBioMsg('');
+    const e = await unlockWithBio();
+    setBusy(false);
+    if (e) setBioMsg(e);
+  };
+
+  // Ask for Face ID as soon as the app opens (iOS may want a tap first; the button covers that).
+  useEffect(() => {
+    if (bio) void tryBio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="lock-screen">
       <span className="lock-icon">
-        <Icon name="lock" size={26} />
+        <Icon name={bio ? 'faceid' : 'lock'} size={28} />
       </span>
-      <div className="lock-title">Enter PIN</div>
+      <div className="lock-title">{bio ? 'Unlock TeachAssist' : 'Enter PIN'}</div>
       <PinPad
-        error={error}
+        error={error || bioMsg}
         onComplete={async (pin) => {
           const e = await unlock(pin);
           setError(e ?? '');
         }}
       />
+      {bio && (
+        <button className="text-btn face-btn" onClick={() => void tryBio()} disabled={busy}>
+          <Icon name="faceid" size={20} /> Use Face ID
+        </button>
+      )}
     </div>
   );
 }
