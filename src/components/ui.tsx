@@ -315,6 +315,8 @@ export function Sheet({
 /* Marks & visuals                                                     */
 /* ------------------------------------------------------------------ */
 
+const RAINBOW = ['#ff5f6d', '#ffa63d', '#ffe23d', '#4ade80', '#38bdf8', '#818cf8', '#e879f9'];
+
 export function Ring({ value, size = 180, stroke = 16, children }: { value: number | null; size?: number; stroke?: number; children?: ReactNode }) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
@@ -326,12 +328,20 @@ export function Ring({ value, size = 180, stroke = 16, children }: { value: numb
   return (
     <div className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <defs>
+          <linearGradient id={`rainbow-${size}`} x1="0" y1="0" x2="1" y2="1">
+            {RAINBOW.map((c, i) => (
+              <stop key={c} offset={i / (RAINBOW.length - 1)} stopColor={c} />
+            ))}
+          </linearGradient>
+        </defs>
         <circle cx={size / 2} cy={size / 2} r={r} stroke="var(--track)" strokeWidth={stroke} fill="none" />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           stroke="var(--accent)"
+          style={{ ['--rainbow-stroke' as string]: `url(#rainbow-${size})` }}
           strokeWidth={stroke}
           strokeLinecap="round"
           fill="none"

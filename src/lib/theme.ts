@@ -12,6 +12,7 @@ export const THEMES = {
   pink: { name: 'Pink', dark: '#ff375f', light: '#ff2d55' },
   brown: { name: 'Brown', dark: '#ac8e68', light: '#9a7650' },
   graphite: { name: 'Graphite', dark: '#98989d', light: '#6e6e73' },
+  rainbow: { name: 'Rainbow', dark: '#ff6b8e', light: '#e6264f' },
 } as const;
 
 export type ThemeName = keyof typeof THEMES;

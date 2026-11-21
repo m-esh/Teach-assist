@@ -36,6 +36,49 @@
 [data-swatch='brown'] { --sw: #a98157; }
 [data-swatch='graphite'] { --sw: #8e8e96; }
 
+/* Rainbow: colours drift slowly (stepped, so it's cheap) and data shows a full spectrum. */
+@property --hue {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 330;
+}
+[data-theme='rainbow'] {
+  --accent-dark: hsl(var(--hue) 90% 68%);
+  --accent-light: hsl(var(--hue) 78% 46%);
+  --spectrum: linear-gradient(90deg, #ff5f6d, #ffa63d, #ffe23d, #4ade80, #38bdf8, #818cf8, #e879f9);
+  animation: hue-drift 60s steps(120) infinite;
+}
+@keyframes hue-drift {
+  from {
+    --hue: 330;
+  }
+  to {
+    --hue: 690;
+  }
+}
+[data-theme='rainbow'] .ring-arc {
+  stroke: var(--rainbow-stroke);
+}
+[data-theme='rainbow'] .meter > span,
+[data-theme='rainbow'] .mini-bar > span,
+[data-theme='rainbow'] .summary-bar > div {
+  background: var(--spectrum);
+  background-size: 100% 100%;
+}
+[data-theme='rainbow'] .trend rect:nth-child(7n + 1) { fill: #ff5f6d; }
+[data-theme='rainbow'] .trend rect:nth-child(7n + 2) { fill: #ffa63d; }
+[data-theme='rainbow'] .trend rect:nth-child(7n + 3) { fill: #f5c518; }
+[data-theme='rainbow'] .trend rect:nth-child(7n + 4) { fill: #4ade80; }
+[data-theme='rainbow'] .trend rect:nth-child(7n + 5) { fill: #38bdf8; }
+[data-theme='rainbow'] .trend rect:nth-child(7n + 6) { fill: #818cf8; }
+[data-theme='rainbow'] .trend rect:nth-child(7n + 7) { fill: #e879f9; }
+[data-swatch='rainbow'] {
+  --sw: #e879f9;
+}
+.swatch[data-swatch='rainbow'] span {
+  background: conic-gradient(from 200deg, #ff5f6d, #ffa63d, #ffe23d, #4ade80, #38bdf8, #818cf8, #e879f9, #ff5f6d);
+}
+
 /* ---------- dark (default) ---------- */
 :root {
   --accent: var(--accent-dark);
@@ -1857,6 +1900,9 @@ button.row:active:not(:disabled),
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  [data-theme='rainbow'] {
+    animation: none;
+  }
   *,
   *::before,
   *::after,
